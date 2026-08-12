@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0E80BE">
+<title>Panel del Conductor · Ruta San Simón (R-18)</title>
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="manifest" href="manifest-conductor.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- Importamos Supabase como módulo -->
+<script type="importmap">
+{
+  "imports": {
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+  }
+}
+</script>
+<script type="module" src="conductor-logic.js"></script>
+
+<style>
+  :root{
+    --paper:#FAF7F0; --paper-2:#FFFFFF; --surface:#F4EEDC; --ink:#221B12; --ink-soft:#7C7261;
+    --talavera:#0E80BE; --talavera-dark:#0A5F8E;
+    --agave:#1E9E5A; --agave-dark:#147A43;
+    --alerta:#E1483A; --alerta-bg:#FCE3DE;
+    --cempasuchil:#F5900C; --cempasuchil-dark:#CB7208;
+    --border:#E4DBC5;
+    --shadow: 0 1px 2px rgba(34,27,18,0.05), 0 6px 16px -8px rgba(34,27,18,0.14);
+    --shadow-md: 0 10px 30px -10px rgba(34,27,18,0.22);
+  }
+  *{ -webkit-tap-highlight-color: transparent; }
+  html, body{ height:100%; }
+  body{ background:var(--paper); color:var(--ink); font-family:'Plus Jakarta Sans', sans-serif; }
+  .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.01em; }
+  .font-mono{ font-family:'JetBrains Mono', monospace; }
+  .placard{ background:var(--paper-2); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
+  [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
+
+  .btn-lift{ transition: all .25s cubic-bezier(.2,.8,.2,1); }
+  .btn-lift:hover{ transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-lift:active{ transform: translateY(0) scale(.97); }
+
+  #toggleBtn{
+    width:190px; height:190px; border-radius:50%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border:1px solid var(--border); background:var(--paper-2); box-shadow:var(--shadow);
+    font-family:'Sora', sans-serif; font-weight:600;
+    transition: all .3s cubic-bezier(.2,.8,.2,1);
+  }
+  #toggleBtn:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  #toggleBtn:active{ transform: scale(.98); }
+  #toggleBtn.on{
+    background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
+    border-color:var(--agave-dark); color:#fff; box-shadow: var(--shadow-md);
+  }
+  #toggleBtn.on .pulseDot{ animation: pulse 1.4s ease-out infinite; }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(255,255,255,.55); }
+    100%{ box-shadow:0 0 0 16px rgba(255,255,255,0); }
+  }
+  .pulseDot{ width:12px; height:12px; border-radius:50%; background:#fff; margin-bottom:10px; display:flex; align-items:center; justify-content:center; }
+  #toggleBtn:not(.on) .pulseDot{ background:var(--surface); }
+  #toggleBtn:not(.on) .pulseDot [data-lucide]{ width:14px; height:14px; color:var(--ink-soft); }
+  #toggleBtn.on .pulseDot [data-lucide]{ width:14px; height:14px; color:var(--agave); }
+  .pulseDot{ width:26px; height:26px; }
+
+  #panicBtn{
+    position:fixed; right:18px; bottom:18px; z-index:55;
+    width:64px; height:64px; border-radius:50%;
+    background: linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 26px -8px rgba(225,72,58,.55);
+    border:3px solid #fff;
+    transition: all .25s cubic-bezier(.2,.8,.2,1);
+  }
+  #panicBtn:hover{ transform: translateY(-2px) scale(1.03); }
+  #panicBtn:active{ transform: scale(.94); }
+  #panicOverlay{
+    position:fixed; inset:0; z-index:70;
+    background:rgba(20,16,10,.6);
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #panicOverlay.show{ display:flex; }
+  #panicSheet{
+    width:100%; max-width:28rem;
+    background:var(--paper); border-radius:1.75rem 1.75rem 0 0;
+    padding:1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    border-top:1px solid var(--border);
+    box-shadow: 0 -10px 40px -10px rgba(0,0,0,.3);
+  }
+
+  #installBtn.show{ display:flex; }
+
+  .ramal-btn{
+    border:1.5px solid var(--border); background:var(--paper-2); color:var(--ink-soft);
+    border-radius:1rem; padding:.8rem; font-family:'Sora', sans-serif; font-weight:600; font-size:14px;
+    transition: all .2s ease;
+  }
+  .ramal-btn:not(.active):hover{ border-color:var(--talavera); color:var(--ink); transform: translateY(-1px); }
+  .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#fff; box-shadow:var(--shadow); }
+  .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#fff; box-shadow:var(--shadow); }
+
+  #pinInput{ letter-spacing:.15em; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body class="font-body">
+
+<!-- PANTALLA DE LOGIN DE CONDUCTOR -->
+<div id="pinScreen" class="min-h-screen flex items-center justify-center px-6">
+  <div class="placard p-7 w-full max-w-sm text-center">
+    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">
+      <i data-lucide="bus"></i>
+    </div>
+    <h1 class="font-display font-semibold text-xl">Panel del Conductor</h1>
+    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+    <p class="text-xs mt-4" style="color:var(--ink-soft);">Entra con tu PIN personal</p>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN"
+           class="mt-2 w-full text-center text-2xl font-mono py-3 rounded-2xl border"
+           style="background:var(--surface); border-color:var(--border); color:var(--ink);">
+    <p id="pinError" class="text-sm mt-2 hidden" style="color:var(--alerta);">PIN incorrecto, intenta otra vez.</p>
+    <button id="pinSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">Entrar</button>
+  </div>
+</div>
+
+<!-- PANEL PRINCIPAL -->
+<div id="mainScreen" class="hidden min-h-screen flex flex-col items-center px-6 py-8 pb-28">
+  <header class="text-center mb-6 w-full max-w-sm flex items-center justify-between gap-2">
+    <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--paper-2); border:1px solid var(--border); color:var(--ink);">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </button>
+    <div class="text-left flex-1">
+      <h1 class="font-display font-semibold text-xl">Panel del Conductor</h1>
+      <p class="text-sm" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+    </div>
+    <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#fff;">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
+    </button>
+  </header>
+
+  <div class="placard px-4 py-4 mb-6 w-full max-w-sm">
+    <div class="flex items-center gap-2 mb-2.5">
+      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--paper-2)); color:var(--talavera);"><i data-lucide="user" class="w-4 h-4"></i></span>
+      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Mi nombre</span>
+    </div>
+    <div class="flex gap-2">
+      <input id="driverNameInput" type="text" maxlength="30" placeholder="Tu nombre"
+             class="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border font-display font-semibold"
+             style="background:var(--surface); border-color:var(--border); color:var(--ink);">
+      <button id="saveNameBtn" class="btn-lift px-4 py-2.5 rounded-xl font-display font-semibold text-sm shrink-0" style="background:var(--talavera); color:#fff;">Guardar</button>
+    </div>
+    <p id="nameSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave-dark);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Nombre guardado. Ya se ve así en el panel del dueño.</p>
+    <button id="switchDriverBtn" class="text-xs mt-3.5 underline underline-offset-2" style="color:var(--ink-soft);">Cambiar de conductor</button>
+  </div>
+
+  <div class="placard px-4 py-4 mb-8 w-full max-w-sm">
+    <div class="flex items-center gap-2 mb-2.5">
+      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--cempasuchil) 16%, var(--paper-2)); color:var(--cempasuchil);"><i data-lucide="route" class="w-4 h-4"></i></span>
+      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Tu ramal hoy</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2.5">
+      <button class="ramal-btn" data-route="capilla">Por Capilla</button>
+      <button class="ramal-btn" data-route="secundaria">Por Secundaria</button>
+    </div>
+    <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Esto le avisa al dueño (y a los pasajeros) por cuál ramal vas.</p>
+  </div>
+
+  <div class="placard px-4 py-4 mb-6 w-full max-w-sm">
+    <div class="flex items-center gap-2 mb-2.5">
+      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--paper-2)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
+      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reportar parada</span>
+    </div>
+    <button id="checkpointBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#fff;">Salí de base San Simón</button>
+    <p id="checkpointSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave-dark);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. Los pasajeros ya lo ven.</p>
+    <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Presiona cuando salgas o llegues. Esto NO comparte tu ubicación exacta, solo avisa la hora.</p>
+  </div>
+
+  <button id="toggleBtn">
+    <span class="pulseDot"><i id="toggleDotIcon" data-lucide="power"></i></span>
+    <span id="toggleLabel" class="text-sm">Encender<br>ubicación</span>
+  </button>
+
+  <p id="statusText" class="text-sm mt-6 text-center max-w-xs" style="color:var(--ink-soft);">
+    Presiona el botón para que los pasajeros vean tu combi en tiempo real en el mapa.
+  </p>
+
+  <div id="supabaseWarning" class="hidden placard p-4 mt-6 max-w-sm text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
+    Supabase no está configurado todavía. Revisa tu archivo de configuración.
+  </div>
+
+  <div class="placard p-4 mt-8 w-full max-w-sm text-xs font-mono" style="color:var(--ink-soft);">
+    <p>Última posición enviada:</p>
+    <p id="coordsText" class="mt-1">—</p>
+    <p id="updatedText" class="mt-1">—</p>
+  </div>
+
+  <p class="text-[12px] mt-6 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
+    <i data-lucide="lightbulb" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
+    <span>Deja la pantalla encendida y el navegador abierto mientras manejas la ruta. Si cierras esta página o pierdes conexión, tu ubicación se apaga sola para los pasajeros.</span>
+  </p>
+  <p class="text-[12px] mt-3 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
+    <i data-lucide="siren" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
+    <span>¿Asalto, accidente u otra emergencia? Usa el botón rojo de abajo a la derecha para avisarle al dueño de inmediato, con tu ubicación.</span>
+  </p>
+</div>
+
+<button id="panicBtn" aria-label="Botón de ayuda"><i data-lucide="siren" class="w-6 h-6"></i></button>
+
+<div id="panicOverlay">
+  <div id="panicSheet">
+    <div id="panicStepAsk">
+      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--alerta);"><i data-lucide="siren"></i> ¿Necesitas ayuda?</p>
+      <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">
+        Se mandará tu ubicación y tu nombre al dueño de la ruta como alerta de emergencia.
+      </p>
+      <div class="flex gap-2.5 mt-4">
+        <button id="panicCancelBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
+        <button id="panicConfirmBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;">Sí, pedir ayuda</button>
+      </div>
+    </div>
+    <div id="panicStepSent" class="hidden">
+      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--agave);"><i data-lucide="check-circle-2"></i> Alerta enviada</p>
+      <p id="panicSentDetail" class="text-[13px] mt-1.5" style="color:var(--ink-soft);">
+        Tu ubicación se envió al panel del dueño. Como respaldo, también puedes avisarle directo por WhatsApp:
+      </p>
+      <div class="flex gap-2.5 mt-4">
+        <button id="panicCloseBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
+        <a id="panicWhatsappLink" href="#" target="_blank" rel="noopener" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-1.5" style="background:#25D366; color:#fff;"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>
+      </div>
+    </div>
+    <div id="panicStepError" class="hidden">
+      <p class="font-display font-semibold text-lg" style="color:var(--alerta);">No se pudo enviar la alerta en línea</p>
+      <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Revisa tu conexión. Mientras tanto, avisa directo por WhatsApp con tu ubicación:</p>
+      <div class="flex gap-2.5 mt-4">
+        <button id="panicErrorCloseBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
+        <a id="panicErrorWhatsappLink" href="#" target="_blank" rel="noopener" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-1.5" style="background:#25D366; color:#fff;"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

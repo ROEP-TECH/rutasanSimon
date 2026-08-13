@@ -1,177 +1,201 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0E80BE">
-<title>Panel del Dueño · Ruta San Simón (R-18)</title>
-<meta name="robots" content="noindex, nofollow">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ruta 18 - Panel del Concesionario</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet CSS (Mapa) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<link rel="manifest" href="manifest-dueno.json">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script type="importmap">
-{
-  "imports": {
-    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
-  }
-}
-</script>
-<script type="module" src="dueno-logic.js"></script>
-
-<style>
-  /* Exactamente el mismo CSS que tenías antes, sin cambios */
-  :root{
-    --paper:#FAF7F0; --paper-2:#FFFFFF; --surface:#F4EEDC; --ink:#221B12; --ink-soft:#7C7261;
-    --talavera:#0E80BE; --talavera-dark:#0A5F8E;
-    --agave:#1E9E5A; --agave-dark:#147A43;
-    --alerta:#E1483A; --alerta-bg:#FCE3DE;
-    --cempasuchil:#F5900C; --cempasuchil-dark:#CB7208;
-    --border:#E4DBC5;
-    --shadow: 0 1px 2px rgba(34,27,18,0.05), 0 6px 16px -8px rgba(34,27,18,0.14);
-    --shadow-md: 0 10px 30px -10px rgba(34,27,18,0.22);
-  }
-  *{ -webkit-tap-highlight-color: transparent; }
-  body{ background:var(--paper); color:var(--ink); font-family:'Plus Jakarta Sans', sans-serif; }
-  .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.01em; }
-  .font-mono{ font-family:'JetBrains Mono', monospace; }
-  .placard{ background:var(--paper-2); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
-  #map{ height:280px; width:100%; background:var(--surface); }
-  .leaflet-container{ font-family:'Plus Jakarta Sans', sans-serif; background:var(--surface) !important; }
-  [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
-
-  .btn-lift{ transition: all .25s cubic-bezier(.2,.8,.2,1); }
-  .btn-lift:hover{ transform: translateY(-1px); box-shadow: var(--shadow-md); }
-  .btn-lift:active{ transform: translateY(0) scale(.97); }
-
-  .status-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
-  .status-dot.on{ background:var(--agave); box-shadow:0 0 0 3px color-mix(in srgb, var(--agave) 25%, transparent); }
-  .status-dot.off{ background:var(--ink-soft); opacity:.5; }
-
-  .driver-row{ border-bottom:1px solid var(--border); transition: background-color .2s ease; }
-  .driver-row:last-child{ border-bottom:none; }
-  .driver-row:hover{ background:var(--surface); }
-
-  .alert-card{ border:1.5px solid var(--alerta); background:var(--alerta-bg); border-radius:1.1rem; transition: all .3s ease; }
-  .alert-card.resolved{ border-color:var(--border); background:var(--paper-2); opacity:.7; }
-
-  @keyframes flash{
-    0%, 100%{ background-color:var(--alerta-bg); }
-    50%{ background-color:#F5B7AC; }
-  }
-  .alert-card.flashing{ animation: flash 1s ease-in-out 3; }
-
-  #alarmBar{ display:none; }
-  #alarmBar.show{ display:flex; }
-  @keyframes alarmPulse{
-    0%, 100%{ opacity:1; }
-    50%{ opacity:.6; }
-  }
-  #alarmBar.show{ animation: alarmPulse 1s ease-in-out infinite; }
-
-  #installBtn.show{ display:flex; }
-
-  @media (prefers-reduced-motion: reduce){
-    *{ transition: none !important; animation: none !important; }
-  }
-</style>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    /* Ajuste de altura del mapa en móvil y PC */
+    #map { height: 380px; }
+    @media (min-width: 1024px) {
+      #map { height: 100%; min-height: 520px; }
+    }
+  </style>
 </head>
-<body class="font-body pb-10">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between">
 
-<!-- PANTALLA DE LOGIN (CORREO + CONTRASEÑA) -->
-<div id="loginScreen" class="min-h-screen flex items-center justify-center px-6">
-  <div class="placard p-7 w-full max-w-sm text-center">
-    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">
-      <i data-lucide="key-round"></i>
-    </div>
-    <h1 class="font-display font-semibold text-xl">Panel del Dueño</h1>
-    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
-    
-    <div class="mt-5 text-left">
-      <label class="text-xs font-semibold" style="color:var(--ink-soft);">Correo electrónico</label>
-      <input id="emailInput" type="email" placeholder="dueño@ruta.com"
-             class="mt-1 w-full text-center text-lg py-3 rounded-2xl border"
-             style="background:var(--surface); border-color:var(--border); color:var(--ink);">
-    </div>
-    <div class="mt-3 text-left">
-      <label class="text-xs font-semibold" style="color:var(--ink-soft);">Contraseña</label>
-      <input id="passwordInput" type="password" placeholder="••••••••"
-             class="mt-1 w-full text-center text-lg py-3 rounded-2xl border"
-             style="background:var(--surface); border-color:var(--border); color:var(--ink);">
-    </div>
-    
-    <p id="loginError" class="text-sm mt-2 hidden" style="color:var(--alerta);">Correo o contraseña incorrectos.</p>
-    <button id="loginSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">Entrar</button>
-  </div>
-</div>
+  <!-- BARRA SUPERIOR (HEADER) ACCESIBLE -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 px-4 py-3 md:px-8">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- Identificación de la Ruta -->
+      <div class="flex items-center gap-3">
+        <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center font-extrabold text-slate-950 text-xl shadow-lg shadow-emerald-500/20 border border-emerald-300/30">
+          18
+        </div>
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Panel del Dueño</span>
+          <h1 class="text-lg md:text-xl font-bold text-white leading-tight">Ruta 18</h1>
+        </div>
+      </div>
 
-<!-- BARRA DE ALARMA -->
-<div id="alarmBar" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-3" style="background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;">
-  <span class="font-display font-semibold text-sm flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Alerta de ayuda activa</span>
-  <button id="silenceBtn" class="btn-lift text-xs font-semibold px-3 py-1.5 rounded-full" style="background:rgba(255,255,255,.2);">Silenciar</button>
-</div>
+      <!-- Estado y Salida -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl">
+          <span class="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="text-xs text-slate-300 font-semibold">En Vivo</span>
+        </div>
+        <button 
+          id="logoutBtn" 
+          class="bg-slate-800 hover:bg-red-900/50 hover:text-red-300 text-slate-200 font-bold text-xs md:text-sm px-4 py-2.5 rounded-xl transition-all border border-slate-700 flex items-center gap-2"
+        >
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+          <span>Salir</span>
+        </button>
+      </div>
 
-<!-- PANEL PRINCIPAL -->
-<div id="mainScreen" class="hidden max-w-md mx-auto px-4 pt-6 space-y-4">
-  <header class="flex items-center justify-between mb-2 gap-2">
-    <button id="logoutBtn" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--paper-2); border:1px solid var(--border); color:var(--ink);">
-      <i data-lucide="log-out" class="w-4 h-4"></i>
-    </button>
-    <div class="text-center flex-1">
-      <h1 class="font-display font-semibold text-xl">Panel del Dueño</h1>
-      <p class="text-sm" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
     </div>
-    <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#fff;">
-      <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
-    </button>
   </header>
 
-  <div id="supabaseWarning" class="hidden placard p-4 text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
-    Supabase no está configurado.
-  </div>
-
-  <!-- CONDUCTORES -->
-  <section class="placard p-4">
-    <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-      <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
-      <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="max-w-7xl w-full mx-auto px-4 py-6 md:px-8 flex-1">
+    
+    <!-- Mensaje de Bienvenida -->
+    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div>
+        <h2 class="text-2xl md:text-3xl font-extrabold text-white">Monitoreo de Unidades</h2>
+        <p class="text-slate-400 text-sm mt-1">Ubicación y estado de tus combis en tiempo real.</p>
+      </div>
+      <div class="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-3 py-1.5 rounded-lg w-fit">
+        Última actualización: <span id="lastUpdate">Ahora mismo</span>
+      </div>
     </div>
-    <div id="driversList" class="divide-y" style="border-color:var(--border);"></div>
-  </section>
 
-  <!-- AVISOS DE RUTA -->
-  <section class="placard p-4">
-    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-4 h-4"></i> Avisos recientes</h2>
-    <div id="routeEventsList" class="space-y-2.5">
-      <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
+    <!-- TARJETAS DE RESUMEN RÁPIDO (Letras grandes) -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6">
+      
+      <!-- Unidades Activas -->
+      <div class="bg-slate-900 border border-slate-800 p-4 md:p-5 rounded-2xl flex items-center gap-4">
+        <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl">
+          <i data-lucide="bus" class="w-7 h-7 md:w-8 md:h-8"></i>
+        </div>
+        <div>
+          <p class="text-xs md:text-sm text-slate-400 font-medium">Unidades Trabajando</p>
+          <p class="text-2xl md:text-3xl font-extrabold text-white" id="activeUnitsCount">0</p>
+        </div>
+      </div>
+
+      <!-- Alert / Incidentes -->
+      <div class="bg-slate-900 border border-slate-800 p-4 md:p-5 rounded-2xl flex items-center gap-4">
+        <div class="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl">
+          <i data-lucide="shield-alert" class="w-7 h-7 md:w-8 md:h-8"></i>
+        </div>
+        <div>
+          <p class="text-xs md:text-sm text-slate-400 font-medium">Alertas de Velocidad</p>
+          <p class="text-2xl md:text-3xl font-extrabold text-white" id="alertsCount">0</p>
+        </div>
+      </div>
+
+      <!-- Estado General -->
+      <div class="col-span-2 md:col-span-1 bg-slate-900 border border-slate-800 p-4 md:p-5 rounded-2xl flex items-center gap-4">
+        <div class="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl">
+          <i data-lucide="check-circle-2" class="w-7 h-7 md:w-8 md:h-8"></i>
+        </div>
+        <div>
+          <p class="text-xs md:text-sm text-slate-400 font-medium">Estado del Servicio</p>
+          <p class="text-lg md:text-xl font-bold text-emerald-400">Normal</p>
+        </div>
+      </div>
+
     </div>
-  </section>
 
-  <!-- MAPA -->
-  <section class="placard overflow-hidden">
-    <div id="map"></div>
-  </section>
+    <!-- SECCIÓN DE MAPA Y LISTA (GRID RESPONSIVO) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- CONTENEDOR DEL MAPA (Ocupa 7/12 en PC) -->
+      <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-3 md:p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3 px-2">
+          <h3 class="font-bold text-white text-base md:text-lg flex items-center gap-2">
+            <i data-lucide="map-pin" class="w-5 h-5 text-emerald-400"></i>
+            Ubicación en el Mapa
+          </h3>
+          <span class="text-xs text-slate-400">Toca un marcador para ver datos</span>
+        </div>
+        
+        <!-- El elemento del Mapa -->
+        <div id="map" class="rounded-2xl border border-slate-800 overflow-hidden"></div>
+      </div>
 
-  <!-- ALERTAS -->
-  <section>
-    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Alertas de ayuda</h2>
-    <div id="alertsEmpty" class="placard p-4 text-sm text-center flex items-center justify-center gap-1.5" style="color:var(--ink-soft);">
-      <i data-lucide="check-circle-2" class="w-4 h-4"></i> No hay alertas por ahora.
+      <!-- LISTA DE UNIDADES Y CHOFERES (Ocupa 5/12 en PC) -->
+      <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-3xl p-4 md:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-white text-base md:text-lg flex items-center gap-2">
+            <i data-lucide="users" class="w-5 h-5 text-emerald-400"></i>
+            Mis Combi / Unidades
+          </h3>
+          <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full font-semibold" id="totalUnitsBadge">
+            0 Registradas
+          </span>
+        </div>
+
+        <!-- Lista scrolleable accesible -->
+        <div id="unitsList" class="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+          <!-- Ejemplo de Card de Unidad (Cargado dinámicamente con JS) -->
+          <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold rounded-xl flex items-center justify-center text-sm">
+                U-04
+              </div>
+              <div>
+                <p class="font-bold text-white text-sm">Unidad 04</p>
+                <p class="text-xs text-slate-400">Chofer: Juan Pérez</p>
+              </div>
+            </div>
+            <a href="tel:5512345678" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
+              <i data-lucide="phone" class="w-3.5 h-3.5"></i>
+              <span>Llamar</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+
     </div>
-    <div id="alertsList" class="space-y-2.5"></div>
-  </section>
-</div>
+
+  </main>
+
+  <!-- FOOTER LIMPIO -->
+  <footer class="bg-slate-950 border-t border-slate-900 py-4 px-4 text-center text-xs text-slate-500 mt-6">
+    Sistemas de Monitoreo • <strong>Ruta 18</strong>
+  </footer>
+
+  <!-- SCRIPT DE INICIALIZACIÓN -->
+  <script>
+    lucide.createIcons();
+
+    // Inicialización del Mapa
+    let map;
+    function initMap() {
+      // Coordenadas iniciales por defecto (Ej. Ciudad de México / Área Metropolitana)
+      map = L.map('map').setView([19.4326, -99.1332], 13);
+
+      // Tema oscuro para el mapa para encajar con el diseño
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(map);
+    }
+
+    // Cargar mapa cuando la página esté lista
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+  </script>
+
+  <!-- AQUÍ CARGAS TU LÓGICA DE SUPABASE DEL DUEÑO -->
+  <script src="../dueno-logic.js"></script>
 
 </body>
 </html>

@@ -7,6 +7,7 @@ let driverMarkers = {};
 let locationChannel = null;
 let routeChannel = null;
 let alertChannel = null;
+let checadorEventsChannel = null;
 let mapInitialized = false; // <--- ESTO ES NUEVO (Evita que el mapa se duplique)
 
 // Elementos DOM
@@ -68,6 +69,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   if (locationChannel) supabase.removeChannel(locationChannel);
   if (routeChannel) supabase.removeChannel(routeChannel);
   if (alertChannel) supabase.removeChannel(alertChannel);
+  if (checadorEventsChannel) supabase.removeChannel(checadorEventsChannel);
   currentUser = null;
   currentOwner = null;
   mapInitialized = false; // Reiniciamos el flag al cerrar sesión
@@ -132,10 +134,21 @@ function initRealtimeListeners() {
       console.log('[Realtime] panic_alerts:', status, err || '');
     });
 
+  // 4. Registros del checador (checadas de salida)
+  checadorEventsChannel = supabase
+    .channel('checador-events-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'checador_events' },
+      () => { renderChecadorEvents(); }
+    )
+    .subscribe((status, err) => {
+      console.log('[Realtime] checador_events:', status, err || '');
+    });
+
   // Carga inicial
   renderDriversAndMap();
   renderRouteEvents();
   renderAlerts();
+  renderChecadorEvents();
 }
 
 // ----- RENDERIZAR CONDUCTORES Y MAPA (CON FILTRO ADMIN/OWNER) -----
@@ -271,6 +284,62 @@ async function renderRouteEvents() {
       </div>
     </div>
   `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+// ----- RENDERIZAR REGISTROS DEL CHECADOR -----
+async function renderChecadorEvents() {
+  if (!currentOwner) return;
+
+  const isAdmin = currentOwner.role === 'admin';
+
+  // Solo lo de hoy (hora local del dispositivo)
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  let query = supabase
+    .from('checador_events')
+    .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number ), checador:checador_id ( name )')
+    .gte('created_at', startOfDay.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (!isAdmin) {
+    query = query.eq('owner_id', currentOwner.id);
+  }
+
+  const { data: events, error } = await query;
+  if (error) { console.error('Error cargando checador_events:', error); return; }
+
+  const list = document.getElementById('checadorEventsList');
+  if (!events || events.length === 0) {
+    list.innerHTML = `<p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>`;
+    return;
+  }
+
+  const statusInfo = {
+    a_tiempo: { label: 'A tiempo', icon: 'check-circle-2', color: 'var(--agave)' },
+    retraso: { label: 'Llegó tarde', icon: 'clock', color: 'var(--cempasuchil)' },
+    no_se_presento: { label: 'No se presentó', icon: 'alert-triangle', color: 'var(--alerta)' },
+  };
+
+  list.innerHTML = events.map((ev) => {
+    const info = statusInfo[ev.status] || { label: ev.status || '—', icon: 'circle', color: 'var(--ink-soft)' };
+    const routeTxt = ev.route === 'capilla' ? 'Por Capilla' : (ev.route === 'secundaria' ? 'Por Secundaria' : '');
+    const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
+    const unitNum = ev.unit?.unit_number != null ? `Unidad ${ev.unit.unit_number}` : 'Unidad —';
+
+    return `
+      <div class="flex items-center gap-2.5">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, ${info.color} 16%, var(--paper-2)); color:${info.color};"><i data-lucide="${info.icon}" class="w-4 h-4"></i></span>
+        <div class="min-w-0">
+          <p class="font-display font-semibold text-sm truncate">${unitNum} — ${ev.driver?.name || 'Conductor'} — <span style="color:${info.color};">${info.label}</span></p>
+          <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${time}${routeTxt ? ' · ' + routeTxt : ''}${ev.ubicacion ? ' · pasó por ' + ev.ubicacion : ''}${ev.checador?.name ? ' · Checador: ' + ev.checador.name : ''}</p>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   if (window.lucide) lucide.createIcons();
 }
 

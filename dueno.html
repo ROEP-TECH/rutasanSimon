@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1E293B">
+<meta name="theme-color" content="#065F46">
 <title>Panel del Dueño · Ruta San Simón (R-18)</title>
 <meta name="robots" content="noindex, nofollow">
 
@@ -13,10 +13,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+<!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -32,34 +33,41 @@
 
 <style>
   :root {
-    --bg-page: #F8FAFC;
+    --green-dark: #064E3B;      /* Verde esmeralda oscuro (Alto contraste) */
+    --green-primary: #047857;   /* Verde institucional */
+    --green-light: #ECFDF5;     /* Fondo suave verdoso */
+    --green-border: #A7F3D0;    /* Bordes resaltados */
+    --bg-page: #F0FDF4;         /* Fondo general contrastado */
     --card-bg: #FFFFFF;
-    --text-primary: #0F172A;
-    --text-muted: #475569;
-    --brand-blue: #1E40AF;
-    --brand-blue-hover: #1E3A8A;
-    --border-color: #CBD5E1;
+    --text-main: #022C22;       /* Texto ultra legible */
   }
 
   body {
     background-color: var(--bg-page);
-    color: var(--text-primary);
+    color: var(--text-main);
     font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    font-size: 18px; /* Tamaño de letra base aumentado para adultos mayores */
   }
 
   .card-senior {
     background: var(--card-bg);
-    border: 2px solid var(--border-color);
-    border-radius: 1.25rem;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    border: 3px solid #059669;
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 25px -5px rgba(4, 120, 87, 0.12);
   }
 
+  /* Contenedor del mapa en PC y Móvil */
   #map {
-    height: 320px;
+    height: 420px;
     width: 100%;
     border-radius: 1rem;
     z-index: 1;
+  }
+  @media (min-width: 1024px) {
+    #map {
+      height: 550px;
+    }
   }
 
   .leaflet-container {
@@ -67,45 +75,46 @@
   }
 
   [data-lucide] {
-    stroke-width: 2.2;
+    stroke-width: 2.5;
   }
 
-  /* Estados de conductor */
+  /* Indicadores de estado gigantes y claros */
   .status-dot {
-    width: 14px;
-    height: 14px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
   }
   .status-dot.on {
-    background-color: #16A34A;
-    box-shadow: 0 0 0 4px #DCFCE7;
+    background-color: #10B981;
+    box-shadow: 0 0 0 5px #D1FAE5;
   }
   .status-dot.off {
-    background-color: #94A3B8;
+    background-color: #6B7280;
+    box-shadow: 0 0 0 3px #E5E7EB;
   }
 
   .driver-row {
-    padding: 1rem 0;
-    border-bottom: 2px solid #F1F5F9;
+    padding: 1.25rem 0;
+    border-bottom: 2px solid #E5E7EB;
   }
   .driver-row:last-child {
     border-bottom: none;
   }
 
-  /* Tarjetas de alertas */
+  /* Tarjetas de alertas de pánico */
   .alert-card {
-    border: 2px solid #EF4444;
+    border: 3px solid #DC2626;
     background-color: #FEF2F2;
     border-radius: 1.25rem;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
   }
   .alert-card.resolved {
-    border-color: var(--border-color);
-    background-color: #F8FAFC;
-    opacity: 0.8;
+    border-color: #9CA3AF;
+    background-color: #F3F4F6;
+    opacity: 0.85;
   }
 
   @keyframes flash-senior {
@@ -116,6 +125,7 @@
     animation: flash-senior 1s ease-in-out 3;
   }
 
+  /* Barra superior de alarma */
   #alarmBar {
     display: none;
   }
@@ -123,8 +133,8 @@
     display: flex;
   }
   @keyframes alarmPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.75; }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.85; transform: scale(0.99); }
   }
   #alarmBar.show {
     animation: alarmPulse 1s ease-in-out infinite;
@@ -139,125 +149,148 @@
   }
 </style>
 </head>
-<body class="pb-12">
+<body class="pb-16 min-h-screen">
 
-<!-- BARRA DE ALARMA SUPERIOR -->
-<div id="alarmBar" class="fixed top-0 inset-x-0 z-[100] items-center justify-between gap-3 px-5 py-4 bg-red-600 text-white font-bold text-lg shadow-xl">
-  <span class="flex items-center gap-3">
-    <i data-lucide="siren" class="w-7 h-7 animate-bounce"></i>
+<!-- BARRA DE ALARMA CRÍTICA SUPERIOR -->
+<div id="alarmBar" class="fixed top-0 inset-x-0 z-[100] items-center justify-between gap-4 px-6 py-5 bg-red-600 text-white font-extrabold text-xl shadow-2xl border-b-4 border-red-800">
+  <span class="flex items-center gap-3 tracking-wide">
+    <i data-lucide="siren" class="w-9 h-9 animate-bounce"></i>
     ¡ALERTA DE AYUDA ACTIVA!
   </span>
-  <button id="silenceBtn" class="bg-white text-red-700 hover:bg-red-50 text-base font-extrabold px-5 py-2.5 rounded-xl border-2 border-red-200 active:scale-95 transition">
-    Silenciar
+  <button id="silenceBtn" class="bg-white text-red-700 hover:bg-red-100 text-lg font-black px-6 py-3 rounded-2xl border-3 border-red-300 active:scale-95 transition shadow-lg">
+    SILENCIAR
   </button>
 </div>
 
 <!-- PANTALLA DE LOGIN -->
-<div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 py-8">
-  <div class="card-senior p-8 w-full max-w-md text-center border-3 border-slate-300">
+<div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 py-10">
+  <div class="card-senior p-8 md:p-12 w-full max-w-lg text-center bg-white shadow-2xl">
     
-    <div class="w-20 h-20 rounded-3xl mx-auto mb-4 bg-blue-900 text-white flex items-center justify-center shadow-md">
-      <i data-lucide="key-round" class="w-10 h-10"></i>
+    <!-- Header/Logo de la Ruta Verde y Blanca -->
+    <div class="w-24 h-24 rounded-3xl mx-auto mb-6 bg-emerald-700 text-white flex items-center justify-center shadow-xl border-4 border-emerald-300">
+      <i data-lucide="bus" class="w-12 h-12"></i>
     </div>
     
-    <h1 class="font-extrabold text-2xl text-slate-900">Panel del Dueño</h1>
-    <p class="text-base font-bold text-slate-600 mt-1">Ruta San Simón · R-18</p>
+    <h1 class="font-black text-3xl md:text-4xl text-emerald-950">Panel del Dueño</h1>
+    <p class="text-lg md:text-xl font-bold text-emerald-800 mt-2 bg-emerald-50 py-2 px-4 rounded-xl border border-emerald-200 inline-block">
+      Ruta San Simón · R-18
+    </p>
     
-    <div class="mt-6 text-left space-y-4">
+    <div class="mt-8 text-left space-y-6">
       <div>
-        <label for="emailInput" class="block text-sm font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+        <label for="emailInput" class="block text-base font-black text-emerald-900 uppercase tracking-wide mb-2">
           Correo electrónico
         </label>
         <input id="emailInput" type="email" placeholder="ejemplo@correo.com"
-               class="w-full text-lg px-4 py-3.5 rounded-xl border-2 border-slate-300 bg-slate-50 text-slate-900 font-medium focus:bg-white focus:border-blue-700 focus:outline-none">
+               class="w-full text-xl px-5 py-4 rounded-2xl border-3 border-emerald-600 bg-white text-slate-900 font-bold focus:bg-emerald-50 focus:border-emerald-800 focus:outline-none shadow-inner">
       </div>
       
       <div>
-        <label for="passwordInput" class="block text-sm font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+        <label for="passwordInput" class="block text-base font-black text-emerald-900 uppercase tracking-wide mb-2">
           Contraseña
         </label>
         <input id="passwordInput" type="password" placeholder="••••••••"
-               class="w-full text-lg px-4 py-3.5 rounded-xl border-2 border-slate-300 bg-slate-50 text-slate-900 font-medium focus:bg-white focus:border-blue-700 focus:outline-none">
+               class="w-full text-xl px-5 py-4 rounded-2xl border-3 border-emerald-600 bg-white text-slate-900 font-bold focus:bg-emerald-50 focus:border-emerald-800 focus:outline-none shadow-inner">
       </div>
     </div>
     
-    <p id="loginError" class="text-base font-bold mt-4 p-3 bg-red-100 text-red-700 border-2 border-red-300 rounded-xl hidden">
-      Correo o contraseña incorrectos.
+    <p id="loginError" class="text-lg font-black mt-6 p-4 bg-red-100 text-red-800 border-3 border-red-400 rounded-2xl hidden shadow">
+      ⚠️ Correo o contraseña incorrectos.
     </p>
 
-    <button id="loginSubmit" class="mt-6 w-full py-4 text-xl font-extrabold rounded-xl bg-blue-800 text-white hover:bg-blue-900 active:scale-98 transition shadow-lg">
+    <button id="loginSubmit" class="mt-8 w-full py-5 text-2xl font-black rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white active:scale-98 transition shadow-xl border-b-4 border-emerald-900">
       ENTRAR AL PANEL
     </button>
   </div>
 </div>
 
-<!-- PANEL PRINCIPAL -->
-<div id="mainScreen" class="hidden max-w-xl mx-auto px-4 pt-6 space-y-5">
+<!-- PANEL PRINCIPAL (RESPONSIVO EN GRID PARA PC Y MÓVIL) -->
+<div id="mainScreen" class="hidden max-w-7xl mx-auto px-4 md:px-8 pt-6 space-y-6">
   
-  <!-- ENCABEZADO -->
-  <header class="card-senior p-4 flex items-center justify-between gap-3">
-    <button id="logoutBtn" aria-label="Cerrar sesión" class="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border-2 border-slate-300 shrink-0 font-bold active:scale-95">
-      <i data-lucide="log-out" class="w-6 h-6"></i>
+  <!-- ENCABEZADO SUPERIOR -->
+  <header class="card-senior p-5 md:p-6 flex items-center justify-between gap-4 bg-white">
+    <button id="logoutBtn" aria-label="Cerrar sesión" class="flex items-center justify-center px-5 h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 border-3 border-slate-300 font-black active:scale-95 transition text-base gap-2">
+      <i data-lucide="log-out" class="w-7 h-7 text-red-600"></i>
+      <span class="hidden sm:inline">SALIR</span>
     </button>
     
     <div class="text-center flex-1">
-      <h1 class="font-extrabold text-xl text-slate-900 leading-tight">Panel del Dueño</h1>
-      <p class="text-sm font-bold text-slate-600">Ruta San Simón · R-18</p>
+      <h1 class="font-black text-2xl md:text-3xl text-emerald-950 leading-tight">Panel del Dueño</h1>
+      <p class="text-base md:text-lg font-bold text-emerald-700">Ruta San Simón · R-18</p>
     </div>
 
-    <button id="installBtn" aria-label="Instalar app" class="hidden items-center gap-2 px-4 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm shrink-0 border-2 border-amber-600 shadow-md">
-      <i data-lucide="download" class="w-5 h-5"></i> Instalar
+    <button id="installBtn" aria-label="Instalar app" class="hidden items-center gap-2 px-5 h-14 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-base shrink-0 border-3 border-amber-600 shadow-md">
+      <i data-lucide="download" class="w-6 h-6"></i> Instalar
     </button>
   </header>
 
   <!-- ADVERTENCIA SUPABASE -->
-  <div id="supabaseWarning" class="hidden card-senior p-5 text-base font-bold text-center bg-red-50 border-red-400 text-red-800">
-    <i data-lucide="alert-triangle" class="w-6 h-6 mx-auto mb-1 text-red-600"></i>
+  <div id="supabaseWarning" class="hidden card-senior p-6 text-lg font-black text-center bg-red-100 border-red-500 text-red-900 shadow">
+    <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-2 text-red-600"></i>
     Supabase no está configurado.
   </div>
 
-  <!-- CONDUCTORES -->
-  <section class="card-senior p-5">
-    <div class="flex items-center justify-between mb-3 border-b-2 border-slate-200 pb-3">
-      <h2 class="font-extrabold text-lg text-slate-900 uppercase tracking-wide flex items-center gap-2">
-        <i data-lucide="users" class="w-6 h-6 text-blue-800"></i> Conductores
-      </h2>
-      <span id="driversOnlineCount" class="text-base font-extrabold px-3 py-1 bg-slate-100 border border-slate-300 rounded-lg text-slate-800">
-        —
-      </span>
-    </div>
-    <div id="driversList" class="divide-y-2 divide-slate-100 text-base font-semibold"></div>
-  </section>
-
-  <!-- AVISOS DE RUTA -->
-  <section class="card-senior p-5">
-    <h2 class="font-extrabold text-lg text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2 border-b-2 border-slate-200 pb-3">
-      <i data-lucide="flag" class="w-6 h-6 text-blue-800"></i> Avisos recientes
-    </h2>
-    <div id="routeEventsList" class="space-y-3">
-      <p id="routeEventsEmpty" class="text-base font-medium text-slate-600 text-center py-3">
-        Todavía no hay avisos de los conductores hoy.
-      </p>
-    </div>
-  </section>
-
-  <!-- MAPA -->
-  <section class="card-senior p-2">
-    <div id="map"></div>
-  </section>
-
-  <!-- ALERTAS -->
-  <section class="card-senior p-5">
-    <h2 class="font-extrabold text-lg text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2 border-b-2 border-slate-200 pb-3">
-      <i data-lucide="bell" class="w-6 h-6 text-red-600"></i> Alertas de ayuda
-    </h2>
+  <!-- DISPOSICIÓN RESPONSIVA (1 columna en Celular, 2 columnas amplias en PC) -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
     
-    <div id="alertsEmpty" class="p-4 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 text-base font-semibold text-slate-600 text-center flex items-center justify-center gap-2">
-      <i data-lucide="check-circle-2" class="w-5 h-5 text-green-600"></i> No hay alertas por ahora.
+    <!-- COLUMNA IZQUIERDA EN PC (MAPA Y ALERTAS) -->
+    <div class="lg:col-span-7 space-y-6 order-2 lg:order-1">
+      <!-- MAPA PRINCIPAL -->
+      <section class="card-senior p-3 bg-white">
+        <div class="flex items-center justify-between px-3 py-2 mb-2 border-b-2 border-emerald-200">
+          <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide flex items-center gap-2">
+            <i data-lucide="map-pin" class="w-7 h-7 text-emerald-700"></i> Mapa de Unidades
+          </h2>
+          <span class="text-sm font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg">En Tiempo Real</span>
+        </div>
+        <div id="map"></div>
+      </section>
+
+      <!-- ALERTAS DE AYUDA / PÁNICO -->
+      <section class="card-senior p-6 bg-white">
+        <h2 class="font-black text-xl text-slate-900 uppercase tracking-wide mb-4 flex items-center gap-3 border-b-3 border-slate-200 pb-3">
+          <i data-lucide="bell" class="w-7 h-7 text-red-600"></i> Alertas de ayuda
+        </h2>
+        
+        <div id="alertsEmpty" class="p-6 rounded-2xl bg-emerald-50 border-3 border-dashed border-emerald-300 text-lg font-extrabold text-emerald-900 text-center flex items-center justify-center gap-3">
+          <i data-lucide="check-circle-2" class="w-7 h-7 text-emerald-600"></i> No hay alertas activas por ahora.
+        </div>
+        
+        <div id="alertsList" class="space-y-4 mt-4"></div>
+      </section>
     </div>
-    
-    <div id="alertsList" class="space-y-3 mt-3"></div>
-  </section>
+
+    <!-- COLUMNA DERECHA EN PC (CONDUCTORES Y AVISOS) -->
+    <div class="lg:col-span-5 space-y-6 order-1 lg:order-2">
+      
+      <!-- LISTA DE CONDUCTORES -->
+      <section class="card-senior p-6 bg-white">
+        <div class="flex items-center justify-between mb-4 border-b-3 border-emerald-200 pb-3">
+          <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide flex items-center gap-3">
+            <i data-lucide="users" class="w-7 h-7 text-emerald-700"></i> Conductores
+          </h2>
+          <span id="driversOnlineCount" class="text-lg font-black px-4 py-1.5 bg-emerald-100 border-2 border-emerald-400 rounded-xl text-emerald-900">
+            —
+          </span>
+        </div>
+        <div id="driversList" class="divide-y-2 divide-slate-200 text-lg font-bold"></div>
+      </section>
+
+      <!-- AVISOS RECIENTES DE LA RUTA -->
+      <section class="card-senior p-6 bg-white">
+        <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide mb-4 flex items-center gap-3 border-b-3 border-emerald-200 pb-3">
+          <i data-lucide="flag" class="w-7 h-7 text-emerald-700"></i> Avisos recientes
+        </h2>
+        <div id="routeEventsList" class="space-y-4">
+          <p id="routeEventsEmpty" class="text-lg font-bold text-slate-600 text-center py-4 bg-slate-50 rounded-2xl border-2 border-slate-200">
+            Todavía no hay avisos de los conductores hoy.
+          </p>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
 
 </div>
 

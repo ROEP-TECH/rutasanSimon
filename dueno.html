@@ -33,13 +33,12 @@
 
 <style>
   :root {
-    --green-dark: #064E3B;      /* Verde esmeralda oscuro (Alto contraste) */
+    --green-dark: #064E3B;      /* Verde esmeralda oscuro */
     --green-primary: #047857;   /* Verde institucional */
     --green-light: #ECFDF5;     /* Fondo suave verdoso */
-    --green-border: #A7F3D0;    /* Bordes resaltados */
-    --bg-page: #F0FDF4;         /* Fondo general contrastado */
+    --bg-page: #F0FDF4;         /* Fondo general */
     --card-bg: #FFFFFF;
-    --text-main: #022C22;       /* Texto ultra legible */
+    --text-main: #022C22;
   }
 
   body {
@@ -47,7 +46,7 @@
     color: var(--text-main);
     font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
-    font-size: 18px; /* Tamaño de letra base aumentado para adultos mayores */
+    font-size: 18px;
   }
 
   .card-senior {
@@ -57,17 +56,14 @@
     box-shadow: 0 10px 25px -5px rgba(4, 120, 87, 0.12);
   }
 
-  /* Contenedor del mapa en PC y Móvil */
   #map {
     height: 420px;
     width: 100%;
-    border-radius: 1rem;
+    border-radius: 1.25rem;
     z-index: 1;
   }
   @media (min-width: 1024px) {
-    #map {
-      height: 550px;
-    }
+    #map { height: 550px; }
   }
 
   .leaflet-container {
@@ -78,7 +74,6 @@
     stroke-width: 2.5;
   }
 
-  /* Indicadores de estado gigantes y claros */
   .status-dot {
     width: 20px;
     height: 20px;
@@ -95,15 +90,34 @@
     box-shadow: 0 0 0 3px #E5E7EB;
   }
 
+  /* ESTILOS MEJORADOS PARA LA LISTA DE CONDUCTORES CLICKEABLE */
   .driver-row {
-    padding: 1.25rem 0;
-    border-bottom: 2px solid #E5E7EB;
-  }
-  .driver-row:last-child {
-    border-bottom: none;
+    padding: 1.25rem;
+    margin-bottom: 0.75rem;
+    border: 3px solid #E5E7EB;
+    border-radius: 1.25rem;
+    background-color: #FFFFFF;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
-  /* Tarjetas de alertas de pánico */
+  .driver-row:hover, .driver-row:focus {
+    border-color: #059669;
+    background-color: #ECFDF5;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(5, 150, 105, 0.15);
+  }
+
+  .driver-row:active {
+    transform: translateY(0);
+    background-color: #D1FAE5;
+  }
+
+  /* Tarjeta de alertas */
   .alert-card {
     border: 3px solid #DC2626;
     background-color: #FEF2F2;
@@ -125,24 +139,14 @@
     animation: flash-senior 1s ease-in-out 3;
   }
 
-  /* Barra superior de alarma */
-  #alarmBar {
-    display: none;
-  }
-  #alarmBar.show {
-    display: flex;
-  }
+  #alarmBar { display: none; }
+  #alarmBar.show { display: flex; }
   @keyframes alarmPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.85; transform: scale(0.99); }
   }
-  #alarmBar.show {
-    animation: alarmPulse 1s ease-in-out infinite;
-  }
-
-  #installBtn.show {
-    display: inline-flex;
-  }
+  #alarmBar.show { animation: alarmPulse 1s ease-in-out infinite; }
+  #installBtn.show { display: inline-flex; }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
@@ -166,7 +170,6 @@
 <div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 py-10">
   <div class="card-senior p-8 md:p-12 w-full max-w-lg text-center bg-white shadow-2xl">
     
-    <!-- Header/Logo de la Ruta Verde y Blanca -->
     <div class="w-24 h-24 rounded-3xl mx-auto mb-6 bg-emerald-700 text-white flex items-center justify-center shadow-xl border-4 border-emerald-300">
       <i data-lucide="bus" class="w-12 h-12"></i>
     </div>
@@ -204,10 +207,9 @@
   </div>
 </div>
 
-<!-- PANEL PRINCIPAL (RESPONSIVO EN GRID PARA PC Y MÓVIL) -->
+<!-- PANEL PRINCIPAL -->
 <div id="mainScreen" class="hidden max-w-7xl mx-auto px-4 md:px-8 pt-6 space-y-6">
   
-  <!-- ENCABEZADO SUPERIOR -->
   <header class="card-senior p-5 md:p-6 flex items-center justify-between gap-4 bg-white">
     <button id="logoutBtn" aria-label="Cerrar sesión" class="flex items-center justify-center px-5 h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 border-3 border-slate-300 font-black active:scale-95 transition text-base gap-2">
       <i data-lucide="log-out" class="w-7 h-7 text-red-600"></i>
@@ -224,29 +226,25 @@
     </button>
   </header>
 
-  <!-- ADVERTENCIA SUPABASE -->
   <div id="supabaseWarning" class="hidden card-senior p-6 text-lg font-black text-center bg-red-100 border-red-500 text-red-900 shadow">
     <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-2 text-red-600"></i>
     Supabase no está configurado.
   </div>
 
-  <!-- DISPOSICIÓN RESPONSIVA (1 columna en Celular, 2 columnas amplias en PC) -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
     
-    <!-- COLUMNA IZQUIERDA EN PC (MAPA Y ALERTAS) -->
+    <!-- MAPA Y ALERTAS -->
     <div class="lg:col-span-7 space-y-6 order-2 lg:order-1">
-      <!-- MAPA PRINCIPAL -->
       <section class="card-senior p-3 bg-white">
         <div class="flex items-center justify-between px-3 py-2 mb-2 border-b-2 border-emerald-200">
           <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide flex items-center gap-2">
-            <i data-lucide="map-pin" class="w-7 h-7 text-emerald-700"></i> Mapa de Unidades
+            <i data-lucide="map-pin" class="w-7 h-7 text-emerald-700"></i> Ubicación en vivo
           </h2>
-          <span class="text-sm font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg">En Tiempo Real</span>
+          <span class="text-xs md:text-sm font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg">Presiona a un conductor para enfocar</span>
         </div>
         <div id="map"></div>
       </section>
 
-      <!-- ALERTAS DE AYUDA / PÁNICO -->
       <section class="card-senior p-6 bg-white">
         <h2 class="font-black text-xl text-slate-900 uppercase tracking-wide mb-4 flex items-center gap-3 border-b-3 border-slate-200 pb-3">
           <i data-lucide="bell" class="w-7 h-7 text-red-600"></i> Alertas de ayuda
@@ -260,23 +258,26 @@
       </section>
     </div>
 
-    <!-- COLUMNA DERECHA EN PC (CONDUCTORES Y AVISOS) -->
+    <!-- CONDUCTORES Y AVISOS -->
     <div class="lg:col-span-5 space-y-6 order-1 lg:order-2">
       
-      <!-- LISTA DE CONDUCTORES -->
+      <!-- SECCIÓN CONDUCTORES MEJORADA -->
       <section class="card-senior p-6 bg-white">
         <div class="flex items-center justify-between mb-4 border-b-3 border-emerald-200 pb-3">
-          <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide flex items-center gap-3">
-            <i data-lucide="users" class="w-7 h-7 text-emerald-700"></i> Conductores
-          </h2>
+          <div>
+            <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide flex items-center gap-3">
+              <i data-lucide="users" class="w-7 h-7 text-emerald-700"></i> Conductores
+            </h2>
+            <p class="text-sm font-bold text-emerald-700 mt-1">Toca a un conductor para ver su posición</p>
+          </div>
           <span id="driversOnlineCount" class="text-lg font-black px-4 py-1.5 bg-emerald-100 border-2 border-emerald-400 rounded-xl text-emerald-900">
             —
           </span>
         </div>
-        <div id="driversList" class="divide-y-2 divide-slate-200 text-lg font-bold"></div>
+        <!-- El contenedor se llena automáticamente por dueno-logic.js -->
+        <div id="driversList" class="text-lg font-bold"></div>
       </section>
 
-      <!-- AVISOS RECIENTES DE LA RUTA -->
       <section class="card-senior p-6 bg-white">
         <h2 class="font-black text-xl text-emerald-950 uppercase tracking-wide mb-4 flex items-center gap-3 border-b-3 border-emerald-200 pb-3">
           <i data-lucide="flag" class="w-7 h-7 text-emerald-700"></i> Avisos recientes
@@ -293,6 +294,36 @@
   </div>
 
 </div>
+
+<!-- COMPLEMENTO SCRIPT PARA ENFOCAR EL MAPA AL TOCAR UN CONDUCTOR SIN CAMBIAR TU LÓGICA CORE -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const driversContainer = document.getElementById('driversList');
+    
+    // Escucha clics en la lista de conductores
+    if (driversContainer) {
+      driversContainer.addEventListener('click', (e) => {
+        const row = e.target.closest('.driver-row');
+        if (!row) return;
+
+        // Extrae las coordenadas si dueno-logic.js las pone en atributos data- lat/lng o busca por marcador Leaflet
+        const lat = row.getAttribute('data-lat') || row.dataset.lat;
+        const lng = row.getAttribute('data-lng') || row.dataset.lng;
+
+        // Si existen coordenadas en el elemento renderizado:
+        if (lat && lng && window.map) {
+          window.map.setView([parseFloat(lat), parseFloat(lng)], 16, { animate: true });
+        } else {
+          // Si no usa data-attributes, desplaza suavemente la vista hacia el mapa en celulares
+          const mapElement = document.getElementById('map');
+          if (window.innerWidth < 1024 && mapElement) {
+            mapElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      });
+    }
+  });
+</script>
 
 </body>
 </html>

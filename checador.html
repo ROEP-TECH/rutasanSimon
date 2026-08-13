@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0E80BE">
+<title>Panel del Checador · Ruta San Simón (R-18)</title>
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="manifest" href="manifest-checador.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+  }
+}
+</script>
+<script type="module" src="checador-logic.js"></script>
+
+<style>
+  :root{
+    --paper:#FAF7F0; --paper-2:#FFFFFF; --surface:#F4EEDC; --ink:#221B12; --ink-soft:#7C7261;
+    --talavera:#0E80BE; --talavera-dark:#0A5F8E;
+    --agave:#1E9E5A; --agave-dark:#147A43;
+    --alerta:#E1483A; --alerta-bg:#FCE3DE;
+    --cempasuchil:#F5900C; --cempasuchil-dark:#CB7208;
+    --border:#E4DBC5;
+    --shadow: 0 1px 2px rgba(34,27,18,0.05), 0 6px 16px -8px rgba(34,27,18,0.14);
+    --shadow-md: 0 10px 30px -10px rgba(34,27,18,0.22);
+  }
+  *{ -webkit-tap-highlight-color: transparent; }
+  html, body{ height:100%; }
+  body{ background:var(--paper); color:var(--ink); font-family:'Plus Jakarta Sans', sans-serif; }
+  .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.01em; }
+  .font-mono{ font-family:'JetBrains Mono', monospace; }
+  .placard{ background:var(--paper-2); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
+  [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
+
+  .btn-lift{ transition: all .25s cubic-bezier(.2,.8,.2,1); }
+  .btn-lift:hover{ transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-lift:active{ transform: translateY(0) scale(.97); }
+
+  #pinInput{ letter-spacing:.15em; }
+
+  /* Chip de ubicación */
+  #ubicacionChip{
+    border:1.5px solid var(--border); background:var(--paper-2); color:var(--ink);
+    border-radius:999px; padding:.55rem 1rem; font-size:13px; font-weight:600;
+    display:inline-flex; align-items:center; gap:.4rem; transition: all .2s ease;
+  }
+  #ubicacionChip:hover{ border-color:var(--talavera); transform: translateY(-1px); }
+
+  /* Cuadrícula de unidades */
+  #unitsGrid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:.75rem; }
+  .unit-btn{
+    aspect-ratio: 1 / 1; border-radius:1.25rem; border:1.5px solid var(--border);
+    background:var(--paper-2); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:.35rem; box-shadow:var(--shadow); user-select:none; touch-action: manipulation;
+    transition: all .18s cubic-bezier(.2,.8,.2,1);
+  }
+  .unit-btn:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); border-color:var(--talavera); }
+  .unit-btn:active{ transform: scale(.94); background:var(--surface); }
+  .unit-number{ font-family:'Sora', sans-serif; font-weight:800; font-size:26px; color:var(--ink); }
+  .unit-dot{ width:9px; height:9px; border-radius:50%; }
+
+  /* Toast de confirmación */
+  #toast{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+    max-width:calc(100% - 2.5rem); z-index:60; opacity:0; pointer-events:none;
+    display:flex; align-items:center; gap:.55rem; padding:.85rem 1.1rem; border-radius:1.1rem;
+    font-family:'Sora', sans-serif; font-weight:600; font-size:13.5px; color:#fff;
+    box-shadow: var(--shadow-md); transition: all .25s cubic-bezier(.2,.8,.2,1);
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  #toast.ok{ background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); }
+  #toast.warn{ background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); }
+  #toast.error{ background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); }
+
+  /* Overlays tipo hoja inferior */
+  .sheet-overlay{
+    position:fixed; inset:0; z-index:70;
+    background:rgba(20,16,10,.6);
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-overlay.show{ display:flex; }
+  .sheet{
+    width:100%; max-width:28rem;
+    background:var(--paper); border-radius:1.75rem 1.75rem 0 0;
+    padding:1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    border-top:1px solid var(--border);
+    box-shadow: 0 -10px 40px -10px rgba(0,0,0,.3);
+  }
+
+  #installBtn.show{ display:flex; }
+
+  /* Filas de conductor dentro de la hoja "elegir conductor" */
+  .driver-row{
+    width:100%; text-align:left; border-radius:1.25rem; border:1.5px solid var(--border);
+    background:var(--paper-2); padding:.9rem 1.05rem; display:flex; align-items:center; justify-content:space-between;
+    gap:.75rem; box-shadow:var(--shadow); touch-action: manipulation; user-select:none;
+    transition: all .18s cubic-bezier(.2,.8,.2,1);
+  }
+  .driver-row:active{ transform: scale(.97); background:var(--surface); }
+  .driver-row .driver-name{ font-family:'Sora', sans-serif; font-weight:700; font-size:15px; color:var(--ink); }
+  .driver-row .route-badge{ font-size:11px; font-weight:700; padding:.3rem .65rem; border-radius:999px; white-space:nowrap; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body class="font-body">
+
+<!-- PANTALLA DE LOGIN DE CHECADOR -->
+<div id="pinScreen" class="min-h-screen flex items-center justify-center px-6">
+  <div class="placard p-7 w-full max-w-sm text-center">
+    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">
+      <i data-lucide="clipboard-check"></i>
+    </div>
+    <h1 class="font-display font-semibold text-xl">Panel del Checador</h1>
+    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+    <p class="text-xs mt-4" style="color:var(--ink-soft);">Entra con tu PIN personal</p>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN"
+           class="mt-2 w-full text-center text-2xl font-mono py-3 rounded-2xl border"
+           style="background:var(--surface); border-color:var(--border); color:var(--ink);">
+    <p id="pinError" class="text-sm mt-2 hidden" style="color:var(--alerta);">PIN incorrecto, intenta otra vez.</p>
+    <button id="pinSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">Entrar</button>
+  </div>
+</div>
+
+<!-- PANEL PRINCIPAL -->
+<div id="mainScreen" class="hidden min-h-screen flex flex-col items-center px-5 py-8 pb-16">
+  <header class="w-full max-w-sm flex items-center justify-between gap-2 mb-5">
+    <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--paper-2); border:1px solid var(--border); color:var(--ink);">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </button>
+    <div class="text-left flex-1 min-w-0">
+      <h1 class="font-display font-semibold text-xl truncate">Panel del Checador</h1>
+      <p class="text-sm truncate" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+    </div>
+    <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#fff;">
+      <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
+    </button>
+  </header>
+
+  <div class="w-full max-w-sm flex items-center justify-between gap-2 mb-6 flex-wrap">
+    <p class="text-sm flex items-center gap-1.5 min-w-0" style="color:var(--ink-soft);">
+      <i data-lucide="user-check" class="w-4 h-4 shrink-0"></i>
+      <span class="truncate">Hola, <span id="checadorNameText" class="font-display font-semibold" style="color:var(--ink);">—</span></span>
+    </p>
+    <button id="ubicacionChip">
+      <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+      <span id="ubicacionText">Sin ubicación</span>
+      <span style="opacity:.6;">· cambiar</span>
+    </button>
+  </div>
+
+  <div class="w-full max-w-sm">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--paper-2)); color:var(--talavera);"><i data-lucide="bus" class="w-4 h-4"></i></span>
+      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Toca la unidad que pasó</span>
+    </div>
+    <div id="unitsGrid"></div>
+    <p id="unitsEmpty" class="hidden text-sm text-center mt-4" style="color:var(--ink-soft);">Todavía no hay unidades dadas de alta.</p>
+    <p class="text-[11px] mt-4 text-center" style="color:var(--ink-soft);">Toca la unidad y luego elige al conductor que le tocó hoy.</p>
+  </div>
+
+  <div class="w-full max-w-sm mt-7">
+    <button id="sendSummaryBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#fff;">
+      <i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF del día
+    </button>
+    <p class="text-[11px] mt-2 text-center" style="color:var(--ink-soft);">Arma una tabla con todos tus registros de hoy y la descarga como PDF.</p>
+  </div>
+</div>
+
+<!-- TOAST DE CONFIRMACIÓN -->
+<div id="toast">
+  <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i>
+  <span id="toastText"></span>
+</div>
+
+<!-- OVERLAY: UBICACIÓN -->
+<div id="ubicacionOverlay" class="sheet-overlay">
+  <div class="sheet">
+    <p id="ubicacionTitle" class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="map-pin"></i> ¿Dónde estás hoy?</p>
+    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Escribe tu punto de control. Se queda guardado en este celular para los próximos días.</p>
+    <input id="ubicacionInput" type="text" maxlength="40" placeholder="Ej. Base San Simón"
+           class="mt-3.5 w-full px-3.5 py-3 rounded-2xl border font-display font-semibold"
+           style="background:var(--surface); border-color:var(--border); color:var(--ink);">
+    <div class="flex gap-2.5 mt-4">
+      <button id="ubicacionCancelBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
+      <button id="ubicacionSaveBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#fff;">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY: ELEGIR CONDUCTOR DE LA UNIDAD -->
+<div id="unitDriversOverlay" class="sheet-overlay">
+  <div class="sheet">
+    <p id="unitDriversTitle" class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="users"></i> Unidad —</p>
+    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Toca al conductor que traía la unidad hoy. Mantén presionado su nombre para marcar retraso o que no se presentó.</p>
+    <div id="unitDriversList" class="flex flex-col gap-2.5 mt-4"></div>
+    <button id="unitDriversCancelBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard mt-3">Cancelar</button>
+  </div>
+</div>
+
+<!-- OVERLAY: INCIDENCIA (long-press) -->
+<div id="incidentOverlay" class="sheet-overlay">
+  <div class="sheet">
+    <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--cempasuchil-dark);"><i data-lucide="alert-triangle"></i> Reportar incidencia</p>
+    <p id="incidentUnitLabel" class="text-[13px] mt-1.5 font-display font-semibold" style="color:var(--ink);">—</p>
+    <div class="flex flex-col gap-2.5 mt-4">
+      <button id="incidentTardeBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#fff;">Llegó tarde</button>
+      <button id="incidentNoPresentoBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;">No se presentó</button>
+      <button id="incidentCancelBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

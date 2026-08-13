@@ -102,6 +102,40 @@ function driverIcon(route) {
   });
 }
 
+// ----- TOAST DE AVISO -----
+let toastTimeout = null;
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  const toastText = document.getElementById('toastText');
+  if (!toast || !toastText) return;
+  toastText.textContent = message;
+  toast.classList.add('show');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ----- CENTRAR Y RESALTAR A UN CONDUCTOR EN EL MAPA (al tocarlo en la lista) -----
+function focusDriverOnMap(driverId, driverName, isFresh) {
+  const marker = driverMarkers[driverId];
+
+  if (!isFresh || !marker) {
+    showToast(`${driverName} no tiene ubicación en vivo en este momento.`);
+    return;
+  }
+
+  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  map.setView(marker.getLatLng(), 16, { animate: true });
+  marker.openPopup();
+
+  const el = marker.getElement();
+  if (el) {
+    el.classList.remove('rss-marker-highlight');
+    void el.offsetWidth; // fuerza reflow para poder reiniciar la animación
+    el.classList.add('rss-marker-highlight');
+    setTimeout(() => el.classList.remove('rss-marker-highlight'), 3200);
+  }
+}
+
 // ----- ESCUCHAR DATOS EN TIEMPO REAL -----
 function initRealtimeListeners() {
   // 1. Ubicaciones en vivo
@@ -222,6 +256,8 @@ async function renderDriversAndMap() {
         <span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}
       </span>
     `;
+    row.classList.add('clickable');
+    row.addEventListener('click', () => focusDriverOnMap(d.id, d.name, fresh));
     list.appendChild(row);
 
     if (fresh && location && location.lat && location.lng) {

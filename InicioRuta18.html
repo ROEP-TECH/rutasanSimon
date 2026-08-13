@@ -124,46 +124,63 @@
 
   <!-- Script de Control y Redirección -->
   <script>
-    lucide.createIcons();
+   async function handleLogin(email, password) {
+  const loginError = document.getElementById('errorMessage');
+  
+  // 1. Iniciar sesión en Supabase Auth
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email,
+    password: password,
+  });
 
-    // Lógica para procesar inicio de sesión y redirigir
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const submitBtn = document.getElementById('submitBtn');
-      const errorDiv = document.getElementById('errorMessage');
-      
-      // Feedback visual de carga
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = `<span>Verificando...</span>`;
-      errorDiv.classList.add('hidden');
+  if (error || !data.user) {
+    loginError.textContent = 'Correo o contraseña incorrectos.';
+    loginError.classList.remove('hidden');
+    return;
+  }
 
-      const user = document.getElementById('userInput').value.toLowerCase().trim();
-      const pass = document.getElementById('passwordInput').value;
+  const userId = data.user.id;
 
-      /* 
-        AQUÍ CONECTARÁS SUPABASE:
-        1. Autenticas con supabase.auth.signInWithPassword()
-        2. Lees el rol almacenado en la tabla de usuarios / user_metadata.
-      */
+  // 2. Verificar si es Dueño / Concesionario
+  const { data: owner } = await supabase
+    .from('owners')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
 
-      // EJEMPLO DE REDIRECCIÓN AUTOMÁTICA SEGÚN EL ROL:
-      setTimeout(() => {
-        if (user.includes('dueno') || user.includes('concesionario')) {
-          window.location.href = './dueno/index.html';
-        } else if (user.includes('checador')) {
-          window.location.href = './checador/index.html';
-        } else if (user.includes('chofer') || user.includes('unidad')) {
-          window.location.href = './chofer/index.html';
-        } else {
-          // Si no coincide o credenciales inválidas:
-          errorDiv.classList.remove('hidden');
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = `<span>Iniciar Sesión</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
-          lucide.createIcons();
-        }
-      }, 800);
-    });
+  if (owner) {
+    window.location.href = './dueno/index.html';
+    return;
+  }
+
+  // 3. Verificar si es Checador
+  const { data: checador } = await supabase
+    .from('checkers') // o el nombre de tu tabla de checadores
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (checador) {
+    window.location.href = './checador/index.html';
+    return;
+  }
+
+  // 4. Verificar si es Chofer / Unidad
+  const { data: driver } = await supabase
+    .from('drivers') // o el nombre de tu tabla de choferes
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (driver) {
+    window.location.href = './chofer/index.html';
+    return;
+  }
+
+  // Si está autenticado pero no asignado a ningún rol
+  loginError.textContent = 'Tu cuenta no tiene un rol asignado en la Ruta 18.';
+  loginError.classList.remove('hidden');
+}
   </script>
 </body>
 </html>

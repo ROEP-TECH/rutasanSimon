@@ -82,12 +82,40 @@
 
   #installBtn.show{ display:flex; }
 
+  /* Fila de conductor clicable */
+  .driver-row.clickable{ cursor:pointer; }
+  .driver-row.clickable:active{ background:var(--surface); }
+
+  /* Resalte del marcador cuando se toca un conductor en la lista */
+  .rss-marker-highlight > div{ animation: rssMarkerPulse 1s ease-in-out 3; }
+  @keyframes rssMarkerPulse{
+    0%, 100%{ box-shadow:0 2px 8px rgba(0,0,0,.5); transform:scale(1); }
+    50%{ box-shadow:0 0 0 12px color-mix(in srgb, var(--talavera) 35%, transparent), 0 2px 8px rgba(0,0,0,.5); transform:scale(1.15); }
+  }
+
+  /* Toast de aviso */
+  #toast{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+    max-width:calc(100% - 2.5rem); z-index:90; opacity:0; pointer-events:none;
+    display:flex; align-items:center; gap:.55rem; padding:.85rem 1.1rem; border-radius:1.1rem;
+    font-family:'Sora', sans-serif; font-weight:600; font-size:13.5px; color:#fff;
+    box-shadow: var(--shadow-md); transition: all .25s cubic-bezier(.2,.8,.2,1);
+    background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%);
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+
   @media (prefers-reduced-motion: reduce){
     *{ transition: none !important; animation: none !important; }
   }
 </style>
 </head>
 <body class="font-body pb-10">
+
+<!-- TOAST DE AVISO -->
+<div id="toast">
+  <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+  <span id="toastText"></span>
+</div>
 
 <!-- PANTALLA DE LOGIN (CORREO + CONTRASEÑA) -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center px-6">

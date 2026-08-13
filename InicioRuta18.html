@@ -33,11 +33,20 @@
   <!-- Header Institucional -->
   <header class="relative z-10 w-full max-w-5xl mx-auto px-4 pt-6 flex items-center justify-between">
     <div class="flex items-center gap-3">
-    
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center font-extrabold text-slate-950 shadow-lg shadow-emerald-500/20 border border-emerald-300/30">
+        18
+      </div>
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Sistema Operativo</span>
+        <p class="text-sm font-semibold text-slate-200">Ruta 18 • Transporte Público</p>
+      </div>
     </div>
 
     <!-- Indicador Discreto -->
-    
+    <div class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-full backdrop-blur-md">
+      <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="text-xs text-slate-300 font-medium">Servidor Activo</span>
+    </div>
   </header>
 
   <!-- Contenido Central: Bienvenida + Tarjeta de Login Unificada -->
@@ -57,18 +66,18 @@
     <div class="bg-slate-900/85 border border-slate-800 hover:border-emerald-500/30 p-6 md:p-8 rounded-3xl backdrop-blur-xl shadow-2xl transition-all">
       <form id="loginForm" class="space-y-4">
         
-        <!-- Campo Identificador / Usuario -->
+        <!-- Campo Correo -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Correo de Usuario</label>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Correo Electrónico</label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
               <i data-lucide="user" class="w-4 h-4"></i>
             </span>
             <input 
-              type="text" 
+              type="email" 
               id="userInput"
               required 
-              placeholder="Ej. chofer18_04" 
+              placeholder="usuario@ruta18.com" 
               class="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-100 text-sm rounded-xl pl-10 pr-4 py-2.5 transition-all outline-none placeholder:text-slate-600"
             />
           </div>
@@ -119,68 +128,96 @@
 
   <!-- Footer -->
   <footer class="relative z-10 w-full max-w-5xl mx-auto px-4 pb-6 pt-4 text-center text-xs text-slate-500">
-  
+    Desarrollado por <strong class="text-emerald-400 font-semibold">ROEP TECH</strong> • Ruta 18 System
   </footer>
 
   <!-- Script de Control y Redirección -->
   <script>
-   async function handleLogin(email, password) {
-  const loginError = document.getElementById('errorMessage');
-  
-  // 1. Iniciar sesión en Supabase Auth
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email,
-    password: password,
-  });
+    lucide.createIcons();
 
-  if (error || !data.user) {
-    loginError.textContent = 'Correo o contraseña incorrectos.';
-    loginError.classList.remove('hidden');
-    return;
-  }
+    // 1. INICIALIZAR SUPABASE (Asegúrate de poner tus claves reales aquí)
+    const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co';
+    const SUPABASE_KEY = 'TU-ANON-KEY-AQUI';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const userId = data.user.id;
+    // 2. LÓGICA DE AUTENTICACIÓN Y REDIRECCIÓN
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const submitBtn = document.getElementById('submitBtn');
+      const errorDiv = document.getElementById('errorMessage');
+      
+      // Feedback visual de estado cargando
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span>Verificando...</span>`;
+      errorDiv.classList.add('hidden');
 
-  // 2. Verificar si es Dueño / Concesionario
-  const { data: owner } = await supabase
-    .from('owners')
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle();
+      const email = document.getElementById('userInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
 
-  if (owner) {
-    window.location.href = './dueno/index.html';
-    return;
-  }
+      try {
+        // Step A: Iniciar Sesión en Supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
 
-  // 3. Verificar si es Checador
-  const { data: checador } = await supabase
-    .from('checkers') // o el nombre de tu tabla de checadores
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle();
+        if (error || !data.user) {
+          throw new Error('Correo o contraseña incorrectos.');
+        }
 
-  if (checador) {
-    window.location.href = './checador/index.html';
-    return;
-  }
+        const userId = data.user.id;
 
-  // 4. Verificar si es Chofer / Unidad
-  const { data: driver } = await supabase
-    .from('drivers') // o el nombre de tu tabla de choferes
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle();
+        // Step B: Verificar si el usuario es Dueño
+        const { data: owner } = await supabase
+          .from('owners')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
 
-  if (driver) {
-    window.location.href = './chofer/index.html';
-    return;
-  }
+        if (owner) {
+          window.location.href = './dueno/index.html';
+          return;
+        }
 
-  // Si está autenticado pero no asignado a ningún rol
-  loginError.textContent = 'Tu cuenta no tiene un rol asignado en la Ruta 18.';
-  loginError.classList.remove('hidden');
-}
+        // Step C: Verificar si es Checador
+        const { data: checker } = await supabase
+          .from('checkers') // Cambia por el nombre real de tu tabla si difiere
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (checker) {
+          window.location.href = './checador/index.html';
+          return;
+        }
+
+        // Step D: Verificar si es Chofer
+        const { data: driver } = await supabase
+          .from('drivers') // Cambia por el nombre real de tu tabla si difiere
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (driver) {
+          window.location.href = './chofer/index.html';
+          return;
+        }
+
+        // Si existe la cuenta pero no está en ninguna tabla de roles
+        throw new Error('Tu cuenta no tiene un rol asignado en el sistema.');
+
+      } catch (err) {
+        // Manejo de errores
+        errorDiv.textContent = err.message || 'Error de inicio de sesión.';
+        errorDiv.classList.remove('hidden');
+        
+        // Restaurar botón
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span>Iniciar Sesión</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+        lucide.createIcons();
+      }
+    });
   </script>
 </body>
 </html>

@@ -228,7 +228,9 @@ async function renderDriversAndMap() {
     else if (d.route === 'secundaria') secundariaCount++;
 
     const row = document.createElement('div');
-    row.className = 'driver-row py-3 flex items-center justify-between gap-2';
+    row.className = 'driver-row py-3 px-3 flex items-center justify-between gap-2';
+    if (d.route === 'capilla') row.classList.add('route-capilla');
+    else if (d.route === 'secundaria') row.classList.add('route-secundaria');
     const routeLabel = d.route === 'capilla' ? 'Por Capilla' : 
                        d.route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal';
     const routeColor = d.route === 'capilla' ? '#F5900C' : 
@@ -276,6 +278,11 @@ async function renderDriversAndMap() {
 
   document.getElementById('driversOnlineCount').textContent = 
     onlineCount + ' en ruta · ' + capillaCount + ' Capilla · ' + secundariaCount + ' Sec.';
+
+  const statOnlineNumber = document.getElementById('statOnlineNumber');
+  const statOnlineSub = document.getElementById('statOnlineSub');
+  if (statOnlineNumber) statOnlineNumber.textContent = `${onlineCount}/${drivers.length}`;
+  if (statOnlineSub) statOnlineSub.textContent = `${capillaCount} Capilla · ${secundariaCount} Secundaria`;
 
   const activeMarkers = Object.values(driverMarkers);
   if (activeMarkers.length > 0 && !map._rssCentered) {
@@ -399,20 +406,36 @@ async function renderAlerts() {
 
   const list = document.getElementById('alertsList');
   const empty = document.getElementById('alertsEmpty');
+  const statAlertsCard = document.getElementById('statAlertsCard');
+  const statAlertsNumber = document.getElementById('statAlertsNumber');
+  const statAlertsSub = document.getElementById('statAlertsSub');
 
   if (!alerts || alerts.length === 0) {
     empty.classList.remove('hidden');
     list.innerHTML = '';
     document.getElementById('alarmBar').classList.remove('show');
+    if (statAlertsCard) {
+      statAlertsCard.classList.remove('alert-live');
+      statAlertsNumber.textContent = '0';
+      statAlertsNumber.style.color = 'var(--agave-dark)';
+      statAlertsSub.textContent = 'Todo tranquilo';
+    }
     return;
   }
   empty.classList.add('hidden');
 
-  const anyPending = alerts.some(a => a.status === 'pendiente');
+  const pendingCount = alerts.filter(a => a.status === 'pendiente').length;
+  const anyPending = pendingCount > 0;
   if (anyPending) {
     document.getElementById('alarmBar').classList.add('show');
   } else {
     document.getElementById('alarmBar').classList.remove('show');
+  }
+  if (statAlertsCard) {
+    statAlertsCard.classList.toggle('alert-live', anyPending);
+    statAlertsNumber.textContent = String(pendingCount);
+    statAlertsNumber.style.color = anyPending ? 'var(--alerta)' : 'var(--agave-dark)';
+    statAlertsSub.textContent = anyPending ? 'Necesitan atención' : 'Todo tranquilo';
   }
 
   list.innerHTML = alerts.map(a => {
@@ -461,3 +484,20 @@ async function renderAlerts() {
 document.getElementById('silenceBtn').addEventListener('click', () => {
   document.getElementById('alarmBar').classList.remove('show');
 });
+
+// ----- PESTAÑAS DE ACTIVIDAD (Avisos de ruta / Registros del checador) -----
+const tabAvisosBtn = document.getElementById('tabAvisosBtn');
+const tabChecadorBtn = document.getElementById('tabChecadorBtn');
+const tabAvisosPanel = document.getElementById('tabAvisosPanel');
+const tabChecadorPanel = document.getElementById('tabChecadorPanel');
+
+function switchActivityTab(tab) {
+  const showAvisos = tab === 'avisos';
+  tabAvisosBtn.classList.toggle('active', showAvisos);
+  tabChecadorBtn.classList.toggle('active', !showAvisos);
+  tabAvisosPanel.classList.toggle('active', showAvisos);
+  tabChecadorPanel.classList.toggle('active', !showAvisos);
+}
+
+tabAvisosBtn.addEventListener('click', () => switchActivityTab('avisos'));
+tabChecadorBtn.addEventListener('click', () => switchActivityTab('checador'));

@@ -47,7 +47,7 @@
   .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.01em; }
   .font-mono{ font-family:'JetBrains Mono', monospace; }
   .placard{ background:var(--paper-2); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
-  #map{ height:340px; width:100%; background:var(--surface); }
+  #map{ height:280px; width:100%; background:var(--surface); }
   .leaflet-container{ font-family:'Plus Jakarta Sans', sans-serif; background:var(--surface) !important; }
   [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
 
@@ -59,38 +59,9 @@
   .status-dot.on{ background:var(--agave); box-shadow:0 0 0 3px color-mix(in srgb, var(--agave) 25%, transparent); }
   .status-dot.off{ background:var(--ink-soft); opacity:.5; }
 
-  .driver-row{ border-bottom:1px solid var(--border); border-left:3px solid transparent; transition: background-color .2s ease; }
+  .driver-row{ border-bottom:1px solid var(--border); transition: background-color .2s ease; }
   .driver-row:last-child{ border-bottom:none; }
   .driver-row:hover{ background:var(--surface); }
-  .driver-row.route-capilla{ border-left-color:var(--cempasuchil); }
-  .driver-row.route-secundaria{ border-left-color:var(--agave); }
-
-  /* Tarjetas de resumen (KPI) */
-  .kpi-card{ position:relative; overflow:hidden; }
-  .kpi-number{ font-family:'Sora', sans-serif; font-weight:800; font-size:30px; line-height:1.1; }
-  .kpi-card.alert-live{ border-color:var(--alerta); background:var(--alerta-bg); }
-  .kpi-card.alert-live .kpi-number{ color:var(--alerta); }
-  @keyframes kpiAlertPulse{
-    0%, 100%{ box-shadow:var(--shadow); }
-    50%{ box-shadow:0 0 0 5px color-mix(in srgb, var(--alerta) 20%, transparent), var(--shadow); }
-  }
-  .kpi-card.alert-live{ animation: kpiAlertPulse 1.6s ease-in-out infinite; }
-
-  /* Sección con encabezado + contenido, estilo uniforme */
-  .section-header{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; padding:.9rem 1rem; border-bottom:1px solid var(--border); }
-  .section-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.02em; color:var(--ink-soft); display:flex; align-items:center; gap:.4rem; }
-
-  /* Pestañas de actividad (Avisos / Checador) */
-  .tab-btn{
-    flex:1; text-align:center; padding:.55rem .5rem; border-radius:.85rem; font-family:'Sora', sans-serif;
-    font-weight:700; font-size:12.5px; color:var(--ink-soft); transition: all .2s ease; border:1.5px solid transparent;
-  }
-  .tab-btn.active{ background:var(--paper-2); color:var(--talavera-dark); border-color:var(--border); box-shadow:var(--shadow); }
-  .tab-panel{ display:none; }
-  .tab-panel.active{ display:block; }
-
-  /* Leyenda del mapa */
-  .map-legend-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
 
   .alert-card{ border:1.5px solid var(--alerta); background:var(--alerta-bg); border-radius:1.1rem; transition: all .3s ease; }
   .alert-card.resolved{ border-color:var(--border); background:var(--paper-2); opacity:.7; }
@@ -111,40 +82,12 @@
 
   #installBtn.show{ display:flex; }
 
-  /* Fila de conductor clicable */
-  .driver-row.clickable{ cursor:pointer; }
-  .driver-row.clickable:active{ background:var(--surface); }
-
-  /* Resalte del marcador cuando se toca un conductor en la lista */
-  .rss-marker-highlight > div{ animation: rssMarkerPulse 1s ease-in-out 3; }
-  @keyframes rssMarkerPulse{
-    0%, 100%{ box-shadow:0 2px 8px rgba(0,0,0,.5); transform:scale(1); }
-    50%{ box-shadow:0 0 0 12px color-mix(in srgb, var(--talavera) 35%, transparent), 0 2px 8px rgba(0,0,0,.5); transform:scale(1.15); }
-  }
-
-  /* Toast de aviso */
-  #toast{
-    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
-    max-width:calc(100% - 2.5rem); z-index:90; opacity:0; pointer-events:none;
-    display:flex; align-items:center; gap:.55rem; padding:.85rem 1.1rem; border-radius:1.1rem;
-    font-family:'Sora', sans-serif; font-weight:600; font-size:13.5px; color:#fff;
-    box-shadow: var(--shadow-md); transition: all .25s cubic-bezier(.2,.8,.2,1);
-    background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%);
-  }
-  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
-
   @media (prefers-reduced-motion: reduce){
     *{ transition: none !important; animation: none !important; }
   }
 </style>
 </head>
 <body class="font-body pb-10">
-
-<!-- TOAST DE AVISO -->
-<div id="toast">
-  <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
-  <span id="toastText"></span>
-</div>
 
 <!-- PANTALLA DE LOGIN (CORREO + CONTRASEÑA) -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center px-6">
@@ -198,74 +141,39 @@
     Supabase no está configurado.
   </div>
 
-  <!-- RESUMEN RÁPIDO -->
-  <div class="grid grid-cols-2 gap-3">
-    <div class="placard kpi-card p-4">
-      <div class="flex items-center gap-1.5 mb-1.5" style="color:var(--ink-soft);">
-        <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
-        <span class="text-[10.5px] font-display font-bold uppercase tracking-wide">En ruta ahora</span>
-      </div>
-      <p id="statOnlineNumber" class="kpi-number" style="color:var(--agave-dark);">—</p>
-      <p id="statOnlineSub" class="text-[11px] font-mono mt-1" style="color:var(--ink-soft);">—</p>
+  <!-- CONDUCTORES -->
+  <section class="placard p-4">
+    <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
+      <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
     </div>
-    <div id="statAlertsCard" class="placard kpi-card p-4">
-      <div class="flex items-center gap-1.5 mb-1.5" style="color:var(--ink-soft);">
-        <i data-lucide="siren" class="w-3.5 h-3.5"></i>
-        <span class="text-[10.5px] font-display font-bold uppercase tracking-wide">Alertas activas</span>
-      </div>
-      <p id="statAlertsNumber" class="kpi-number" style="color:var(--ink);">—</p>
-      <p id="statAlertsSub" class="text-[11px] font-mono mt-1" style="color:var(--ink-soft);">—</p>
+    <div id="driversList" class="divide-y" style="border-color:var(--border);"></div>
+  </section>
+
+  <!-- REGISTROS DEL CHECADOR -->
+  <section class="placard p-4">
+    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registros del checador</h2>
+    <div id="checadorEventsList" class="space-y-2.5">
+      <p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>
     </div>
-  </div>
+  </section>
+
+  <!-- AVISOS DE RUTA -->
+  <section class="placard p-4">
+    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-4 h-4"></i> Avisos recientes</h2>
+    <div id="routeEventsList" class="space-y-2.5">
+      <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
+    </div>
+  </section>
 
   <!-- MAPA -->
   <section class="placard overflow-hidden">
-    <div class="section-header">
-      <h2 class="section-title"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
-      <div class="flex items-center gap-3 text-[11px] font-semibold" style="color:var(--ink-soft);">
-        <span class="flex items-center gap-1.5"><span class="map-legend-dot" style="background:var(--cempasuchil);"></span>Capilla</span>
-        <span class="flex items-center gap-1.5"><span class="map-legend-dot" style="background:var(--agave);"></span>Secundaria</span>
-      </div>
-    </div>
     <div id="map"></div>
-  </section>
-
-  <!-- CONDUCTORES -->
-  <section class="placard overflow-hidden">
-    <div class="section-header">
-      <h2 class="section-title"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
-      <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
-    </div>
-    <p class="text-[11px] px-4 pt-3" style="color:var(--ink-soft);">Toca a un conductor para verlo en el mapa.</p>
-    <div id="driversList" class="divide-y px-1" style="border-color:var(--border);"></div>
-  </section>
-
-  <!-- ACTIVIDAD: AVISOS + CHECADOR EN PESTAÑAS -->
-  <section class="placard overflow-hidden">
-    <div class="section-header" style="border-bottom:none; padding-bottom:.4rem;">
-      <h2 class="section-title"><i data-lucide="activity" class="w-4 h-4"></i> Actividad de hoy</h2>
-    </div>
-    <div class="flex gap-1.5 px-3 pb-3">
-      <button id="tabAvisosBtn" class="tab-btn active">Avisos de ruta</button>
-      <button id="tabChecadorBtn" class="tab-btn">Registros del checador</button>
-    </div>
-    <div class="px-4 pb-4" style="border-top:1px solid var(--border);">
-      <div id="tabAvisosPanel" class="tab-panel active pt-3.5">
-        <div id="routeEventsList" class="space-y-2.5">
-          <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
-        </div>
-      </div>
-      <div id="tabChecadorPanel" class="tab-panel pt-3.5">
-        <div id="checadorEventsList" class="space-y-2.5">
-          <p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- ALERTAS -->
   <section>
-    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Historial de alertas de ayuda</h2>
+    <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Alertas de ayuda</h2>
     <div id="alertsEmpty" class="placard p-4 text-sm text-center flex items-center justify-center gap-1.5" style="color:var(--ink-soft);">
       <i data-lucide="check-circle-2" class="w-4 h-4"></i> No hay alertas por ahora.
     </div>

@@ -102,40 +102,6 @@ function driverIcon(route) {
   });
 }
 
-// ----- TOAST DE AVISO -----
-let toastTimeout = null;
-function showToast(message) {
-  const toast = document.getElementById('toast');
-  const toastText = document.getElementById('toastText');
-  if (!toast || !toastText) return;
-  toastText.textContent = message;
-  toast.classList.add('show');
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
-}
-
-// ----- CENTRAR Y RESALTAR A UN CONDUCTOR EN EL MAPA (al tocarlo en la lista) -----
-function focusDriverOnMap(driverId, driverName, isFresh) {
-  const marker = driverMarkers[driverId];
-
-  if (!isFresh || !marker) {
-    showToast(`${driverName} no tiene ubicación en vivo en este momento.`);
-    return;
-  }
-
-  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  map.setView(marker.getLatLng(), 16, { animate: true });
-  marker.openPopup();
-
-  const el = marker.getElement();
-  if (el) {
-    el.classList.remove('rss-marker-highlight');
-    void el.offsetWidth; // fuerza reflow para poder reiniciar la animación
-    el.classList.add('rss-marker-highlight');
-    setTimeout(() => el.classList.remove('rss-marker-highlight'), 3200);
-  }
-}
-
 // ----- ESCUCHAR DATOS EN TIEMPO REAL -----
 function initRealtimeListeners() {
   // 1. Ubicaciones en vivo
@@ -228,9 +194,7 @@ async function renderDriversAndMap() {
     else if (d.route === 'secundaria') secundariaCount++;
 
     const row = document.createElement('div');
-    row.className = 'driver-row py-3 px-3 flex items-center justify-between gap-2';
-    if (d.route === 'capilla') row.classList.add('route-capilla');
-    else if (d.route === 'secundaria') row.classList.add('route-secundaria');
+    row.className = 'driver-row py-3 flex items-center justify-between gap-2';
     const routeLabel = d.route === 'capilla' ? 'Por Capilla' : 
                        d.route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal';
     const routeColor = d.route === 'capilla' ? '#F5900C' : 
@@ -258,8 +222,6 @@ async function renderDriversAndMap() {
         <span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}
       </span>
     `;
-    row.classList.add('clickable');
-    row.addEventListener('click', () => focusDriverOnMap(d.id, d.name, fresh));
     list.appendChild(row);
 
     if (fresh && location && location.lat && location.lng) {
@@ -278,11 +240,6 @@ async function renderDriversAndMap() {
 
   document.getElementById('driversOnlineCount').textContent = 
     onlineCount + ' en ruta · ' + capillaCount + ' Capilla · ' + secundariaCount + ' Sec.';
-
-  const statOnlineNumber = document.getElementById('statOnlineNumber');
-  const statOnlineSub = document.getElementById('statOnlineSub');
-  if (statOnlineNumber) statOnlineNumber.textContent = `${onlineCount}/${drivers.length}`;
-  if (statOnlineSub) statOnlineSub.textContent = `${capillaCount} Capilla · ${secundariaCount} Secundaria`;
 
   const activeMarkers = Object.values(driverMarkers);
   if (activeMarkers.length > 0 && !map._rssCentered) {
@@ -406,36 +363,20 @@ async function renderAlerts() {
 
   const list = document.getElementById('alertsList');
   const empty = document.getElementById('alertsEmpty');
-  const statAlertsCard = document.getElementById('statAlertsCard');
-  const statAlertsNumber = document.getElementById('statAlertsNumber');
-  const statAlertsSub = document.getElementById('statAlertsSub');
 
   if (!alerts || alerts.length === 0) {
     empty.classList.remove('hidden');
     list.innerHTML = '';
     document.getElementById('alarmBar').classList.remove('show');
-    if (statAlertsCard) {
-      statAlertsCard.classList.remove('alert-live');
-      statAlertsNumber.textContent = '0';
-      statAlertsNumber.style.color = 'var(--agave-dark)';
-      statAlertsSub.textContent = 'Todo tranquilo';
-    }
     return;
   }
   empty.classList.add('hidden');
 
-  const pendingCount = alerts.filter(a => a.status === 'pendiente').length;
-  const anyPending = pendingCount > 0;
+  const anyPending = alerts.some(a => a.status === 'pendiente');
   if (anyPending) {
     document.getElementById('alarmBar').classList.add('show');
   } else {
     document.getElementById('alarmBar').classList.remove('show');
-  }
-  if (statAlertsCard) {
-    statAlertsCard.classList.toggle('alert-live', anyPending);
-    statAlertsNumber.textContent = String(pendingCount);
-    statAlertsNumber.style.color = anyPending ? 'var(--alerta)' : 'var(--agave-dark)';
-    statAlertsSub.textContent = anyPending ? 'Necesitan atención' : 'Todo tranquilo';
   }
 
   list.innerHTML = alerts.map(a => {
@@ -484,20 +425,3 @@ async function renderAlerts() {
 document.getElementById('silenceBtn').addEventListener('click', () => {
   document.getElementById('alarmBar').classList.remove('show');
 });
-
-// ----- PESTAÑAS DE ACTIVIDAD (Avisos de ruta / Registros del checador) -----
-const tabAvisosBtn = document.getElementById('tabAvisosBtn');
-const tabChecadorBtn = document.getElementById('tabChecadorBtn');
-const tabAvisosPanel = document.getElementById('tabAvisosPanel');
-const tabChecadorPanel = document.getElementById('tabChecadorPanel');
-
-function switchActivityTab(tab) {
-  const showAvisos = tab === 'avisos';
-  tabAvisosBtn.classList.toggle('active', showAvisos);
-  tabChecadorBtn.classList.toggle('active', !showAvisos);
-  tabAvisosPanel.classList.toggle('active', showAvisos);
-  tabChecadorPanel.classList.toggle('active', !showAvisos);
-}
-
-tabAvisosBtn.addEventListener('click', () => switchActivityTab('avisos'));
-tabChecadorBtn.addEventListener('click', () => switchActivityTab('checador'));

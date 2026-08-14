@@ -1,4 +1,6 @@
 import { supabase } from './supabase-config.js';
+import { registerPlugin, Capacitor } from '@capacitor/core';
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
 // Elementos DOM
 const pinScreen = document.getElementById('pinScreen');
@@ -6,6 +8,7 @@ const mainScreen = document.getElementById('mainScreen');
 const pinInput = document.getElementById('pinInput');
 const pinError = document.getElementById('pinError');
 const driverNameInput = document.getElementById('driverNameInput');
+const saveNameBtn = document.getElementById('saveNameBtn');
 const nameSavedText = document.getElementById('nameSavedText');
 const checkpointBtn = document.getElementById('checkpointBtn');
 const checkpointSavedText = document.getElementById('checkpointSavedText');
@@ -75,9 +78,9 @@ function setupDriverNameField() {
   driverNameInput.value = currentDriver.name || '';
 }
 
-async function saveDriverName() {
+saveNameBtn.addEventListener('click', async () => {
   const newName = driverNameInput.value.trim();
-  if (!newName || newName === (currentDriver.name || '')) return;
+  if (!newName) return;
 
   const { error } = await supabase
     .from('drivers')
@@ -85,15 +88,9 @@ async function saveDriverName() {
     .eq('id', currentDriver.id);
 
   if (!error) {
-    currentDriver.name = newName;
     nameSavedText.classList.remove('hidden');
     setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
   }
-}
-
-driverNameInput.addEventListener('blur', saveDriverName);
-driverNameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { driverNameInput.blur(); }
 });
 
 // ----- RAMAL ASIGNADO -----
@@ -175,8 +172,9 @@ checkpointBtn.addEventListener('click', async () => {
 });
 
 // ----- UBICACIÓN EN VIVO -----
-async function onPos(pos) {
-  const { latitude, longitude, heading, speed } = pos.coords;
+let bgWatcherId = null; // id del watcher nativo (solo se usa dentro de la app empacada)
+
+async function guardarUbicacion(latitude, longitude, heading, speed) {
   const now = Date.now();
   coordsText.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
   updatedText.textContent = new Date(now).toLocaleTimeString('es-MX');
@@ -198,6 +196,12 @@ async function onPos(pos) {
   }
 }
 
+// --- Ruta de navegador normal (sin cambios respecto al código original) ---
+function onPos(pos) {
+  const { latitude, longitude, heading, speed } = pos.coords;
+  guardarUbicacion(latitude, longitude, heading, speed);
+}
+
 function onPosError(err) {
   let msg = 'No se pudo obtener tu ubicación.';
   if (err.code === err.PERMISSION_DENIED) msg = 'Activa el permiso de ubicación de este sitio.';
@@ -205,12 +209,68 @@ function onPosError(err) {
   stopSharing();
 }
 
+// --- Ruta nativa (Android empacado con Capacitor) ---
+async function startSharingNative() {
+  try {
+    bgWatcherId = await BackgroundGeolocation.addWatcher(
+      {
+        backgroundMessage: 'Ruta San Simón está compartiendo tu ubicación',
+        backgroundTitle: 'Compartiendo ubicación',
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: 10, // metros; baja este número si quieres updates más seguidos
+      },
+      (location, error) => {
+        if (error) {
+          console.error('Error de background-geolocation:', error);
+          if (error.code === 'NOT_AUTHORIZED') {
+            statusText.textContent = 'Activa el permiso de ubicación "Todo el tiempo" en Ajustes.';
+          } else {
+            statusText.textContent = 'No se pudo obtener tu ubicación.';
+          }
+          stopSharing();
+          return;
+        }
+        if (location) {
+          guardarUbicacion(location.latitude, location.longitude, location.bearing, location.speed);
+        }
+      }
+    );
+
+    toggleBtn.classList.add('on');
+    toggleLabel.innerHTML = 'Ubicación<br>activa';
+    statusText.textContent = 'Los pasajeros ya pueden ver tu combi en el mapa.';
+  } catch (e) {
+    console.error('No se pudo iniciar background-geolocation:', e);
+    statusText.textContent = 'No se pudo activar la ubicación (revisa permisos en Ajustes).';
+  }
+}
+
+async function stopSharingNative() {
+  if (bgWatcherId !== null) {
+    try {
+      await BackgroundGeolocation.removeWatcher({ id: bgWatcherId });
+    } catch (e) {
+      console.error('Error quitando watcher nativo:', e);
+    }
+    bgWatcherId = null;
+  }
+}
+
+// --- Función pública que usa el botón: decide navegador vs nativo ---
 function startSharing() {
+  if (navigator.vibrate) navigator.vibrate(20);
+
+  if (Capacitor.isNativePlatform()) {
+    startSharingNative();
+    return;
+  }
+
+  // Navegador normal (sin cambios)
   if (!navigator.geolocation) {
     statusText.textContent = 'Tu navegador no soporta geolocalización.';
     return;
   }
-  if (navigator.vibrate) navigator.vibrate(20);
 
   toggleBtn.classList.add('on');
   toggleLabel.innerHTML = 'Ubicación<br>activa';
@@ -224,8 +284,13 @@ function startSharing() {
 }
 
 async function stopSharing() {
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = null;
+  if (Capacitor.isNativePlatform()) {
+    await stopSharingNative();
+  } else if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+
   toggleBtn.classList.remove('on');
   toggleLabel.innerHTML = 'Encender<br>ubicación';
   statusText.textContent = 'Presiona el botón para que los pasajeros vean tu combi.';
@@ -241,7 +306,7 @@ async function stopSharing() {
 }
 
 toggleBtn.addEventListener('click', () => {
-  if (watchId !== null) stopSharing();
+  if (toggleBtn.classList.contains('on')) stopSharing();
   else startSharing();
 });
 

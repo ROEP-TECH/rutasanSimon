@@ -210,7 +210,7 @@ async function renderDriversAndMap() {
     }
 
     row.innerHTML = `
-      <div class="min-w-0 flex items-center gap-2.5">
+      <div class="min-w-0 flex items-center gap-2.5 cursor-pointer">
         <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 14%, var(--paper-2)); color:var(--talavera);"><i data-lucide="user" class="w-4 h-4"></i></span>
         <div class="min-w-0">
           <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(Unidad ${d.unit?.unit_number || '?'})</span></p>
@@ -223,6 +223,18 @@ async function renderDriversAndMap() {
       </span>
     `;
     list.appendChild(row);
+
+    // Agregar evento click para centrar el mapa en el conductor
+    if (fresh && location && location.lat && location.lng) {
+      row.addEventListener('click', () => {
+        const latlng = L.latLng(location.lat, location.lng);
+        map.setView(latlng, 16);
+        if (driverMarkers[d.id]) {
+          driverMarkers[d.id].openPopup();
+        }
+      });
+      row.style.cursor = 'pointer';
+    }
 
     if (fresh && location && location.lat && location.lng) {
       const latlng = [location.lat, location.lng];

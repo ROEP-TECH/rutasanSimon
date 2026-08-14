@@ -1,6 +1,10 @@
 import { supabase } from './supabase-config.js';
-import { registerPlugin, Capacitor } from '@capacitor/core';
-const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
+
+// Capacitor se inyecta como objeto global (window.Capacitor) dentro de la app nativa.
+// Los plugins ya sincronizados quedan disponibles en window.Capacitor.Plugins — no
+// se usa "import" de npm porque este proyecto no usa bundler.
+const Capacitor = window.Capacitor || { isNativePlatform: () => false, Plugins: {} };
+const BackgroundGeolocation = Capacitor.Plugins ? Capacitor.Plugins.BackgroundGeolocation : null;
 
 // Elementos DOM
 const pinScreen = document.getElementById('pinScreen');
@@ -211,6 +215,11 @@ function onPosError(err) {
 
 // --- Ruta nativa (Android empacado con Capacitor) ---
 async function startSharingNative() {
+  if (!BackgroundGeolocation) {
+    console.error('Plugin BackgroundGeolocation no disponible en window.Capacitor.Plugins');
+    statusText.textContent = 'No se encontró el módulo de ubicación nativo. Reinstala la app.';
+    return;
+  }
   try {
     bgWatcherId = await BackgroundGeolocation.addWatcher(
       {

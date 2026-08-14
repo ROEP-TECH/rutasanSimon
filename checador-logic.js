@@ -236,8 +236,8 @@ function openUnitDriversOverlay(unitId) {
   unitDriversTitle.innerHTML = `<i data-lucide="users"></i> Unidad ${unit.unit_number}`;
   unitDriversList.innerHTML = unit.drivers.map((d, idx) => `
     <button class="driver-row" data-driver-idx="${idx}">
-      <span class="driver-name">${escapeAttr(d.driverName)}</span>
-      ${d.route ? `<span class="route-badge" style="background:color-mix(in srgb, ${routeColor(d.route)} 18%, var(--paper-2)); color:${routeColor(d.route)};">${routeLabel(d.route)}</span>` : ''}
+      <span class="driver-name truncate min-w-0 flex-1">${escapeAttr(d.driverName)}</span>
+      ${d.route ? `<span class="route-badge shrink-0" style="background:color-mix(in srgb, ${routeColor(d.route)} 18%, var(--paper-2)); color:${routeColor(d.route)};">${routeLabel(d.route)}</span>` : ''}
     </button>
   `).join('');
 

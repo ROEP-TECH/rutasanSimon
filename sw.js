@@ -2,7 +2,7 @@
    Estrategia: network-first para el HTML (para no quedarte con datos viejos),
    cache-first para el resto (íconos, manifest, tiles ya vistos). */
 
-const CACHE_NAME = 'ruta-san-simon-v8';
+const CACHE_NAME = 'ruta-san-simon-v9';
 const APP_SHELL = [
   './',
   './index.html',

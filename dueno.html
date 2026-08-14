@@ -251,8 +251,8 @@
   <!-- MAIN -->
   <main class="flex-1 min-w-0 max-w-5xl w-full mx-auto px-4 md:px-8 pt-6 pb-16 space-y-5">
 
-    <!-- HEADER -->
-    <header class="flex items-center justify-between gap-2">
+    <!-- HEADER (fijo arriba al hacer scroll, para que el botón de menú siempre esté a la mano) -->
+    <header class="sticky top-0 z-40 -mx-4 md:-mx-8 px-4 md:px-8 py-3 flex items-center justify-between gap-2" style="background:color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom:1px solid var(--border-soft);">
       <div class="flex items-center gap-2 md:hidden min-w-0">
         <button id="mobileNavOpen" aria-label="Abrir menú" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
           <i data-lucide="menu" class="w-4 h-4"></i>
@@ -308,7 +308,7 @@
     </div>
 
     <!-- KPIs -->
-    <section id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 scroll-mt-6">
+    <section id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 scroll-mt-24">
       <div class="card p-3 sm:p-4">
         <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="radio" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>En ruta</span></p>
         <p id="kpiOnRoute" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--agave);">—</p>
@@ -328,7 +328,7 @@
     </section>
 
     <!-- CONDUCTORES -->
-    <section id="conductores" class="card p-4 scroll-mt-6">
+    <section id="conductores" class="card p-4 scroll-mt-24">
       <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
         <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
         <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
@@ -338,7 +338,7 @@
     </section>
 
     <!-- REGISTROS DEL CHECADOR -->
-    <section id="checador" class="card p-4 scroll-mt-6">
+    <section id="checador" class="card p-4 scroll-mt-24">
       <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registros del checador</h2>
       <div id="checadorEventsList" class="space-y-2.5">
         <p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>
@@ -346,7 +346,7 @@
     </section>
 
     <!-- AVISOS DE RUTA -->
-    <section id="avisos" class="card p-4 scroll-mt-6">
+    <section id="avisos" class="card p-4 scroll-mt-24">
       <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-4 h-4"></i> Avisos recientes</h2>
       <div id="routeEventsList" class="space-y-2.5">
         <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
@@ -354,7 +354,7 @@
     </section>
 
     <!-- MAPA -->
-    <section id="mapa" class="card overflow-hidden scroll-mt-6">
+    <section id="mapa" class="card overflow-hidden scroll-mt-24">
       <div class="px-4 pt-4 pb-1">
         <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
       </div>
@@ -362,7 +362,7 @@
     </section>
 
     <!-- ALERTAS -->
-    <section id="alertas" class="scroll-mt-6">
+    <section id="alertas" class="scroll-mt-24">
       <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Alertas de ayuda</h2>
       <div id="alertsEmpty" class="card p-4 text-sm text-center flex items-center justify-center gap-1.5" style="color:var(--ink-soft);">
         <i data-lucide="check-circle-2" class="w-4 h-4"></i> No hay alertas por ahora.

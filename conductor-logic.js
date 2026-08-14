@@ -29,60 +29,67 @@ let watchId = null;
 let locationChannel = null;
 let eventChannel = null;
 
-// ==========================================
-// PERSISTENCIA EN SEGUNDO PLANO (WAKE LOCK + AUDIO)
-// ==========================================
-let wakeLock = null;
-let backgroundAudio = null;
+// Audio silencioso: mientras esté sonando, Chrome/Android no congela la
+// pestaña en segundo plano, así el watchPosition sigue mandando ubicación
+// aunque el chofer se salga a otra app o apague la pantalla un rato.
+const keepAliveAudio = document.getElementById('keepAliveAudio');
 
-// Inicializa o reproduce el audio para evitar suspensión en segundo plano
-function startBackgroundAudio() {
-  const existingAudio = document.getElementById('trackingAudio');
-  if (existingAudio) {
-    backgroundAudio = existingAudio;
-  } else if (!backgroundAudio) {
-    // Si no existe el tag <audio id="trackingAudio"> en el HTML, usa un audio mudo sutil por defecto
-    backgroundAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-    backgroundAudio.loop = true;
-  }
-  
-  backgroundAudio.currentTime = 0;
-  backgroundAudio.play().catch(err => {
-    console.warn('El navegador requirió interacción previa para reproducir el audio:', err);
+function startKeepAliveAudio() {
+  if (!keepAliveAudio) return;
+  keepAliveAudio.play().catch((e) => {
+    // Si el navegador bloquea el autoplay aquí es raro, porque esto se
+    // dispara dentro del click del botón (gesto de usuario), pero por si
+    // las dudas no tronamos nada si falla.
+    console.warn('No se pudo iniciar audio keep-alive:', e);
   });
 }
 
-function stopBackgroundAudio() {
-  if (backgroundAudio) {
-    backgroundAudio.pause();
-    backgroundAudio.currentTime = 0;
-  }
+function stopKeepAliveAudio() {
+  if (!keepAliveAudio) return;
+  keepAliveAudio.pause();
+  keepAliveAudio.currentTime = 0;
 }
 
-// Mantiene la pantalla encendida mientras la app esté activa
+// Wake Lock: evita que la pantalla se apague sola mientras se comparte
+// ubicación. En varios Android, si se apaga la pantalla el sistema es más
+// agresivo pausando todo, así que esto ayuda bastante.
+// El navegador libera el wake lock automáticamente al ocultar la pestaña,
+// por eso lo volvemos a pedir en el listener de "visibilitychange" de abajo.
+let wakeLock = null;
+
 async function requestWakeLock() {
-  if ('wakeLock' in navigator) {
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-    } catch (err) {
-      console.warn('No se pudo activar Screen Wake Lock:', err);
-    }
-  }
-}
-
-function releaseWakeLock() {
-  if (wakeLock !== null) {
-    wakeLock.release().then(() => {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
       wakeLock = null;
     });
+  } catch (e) {
+    console.warn('No se pudo obtener wake lock:', e);
   }
 }
 
-// Reactiva el Wake Lock si la pestaña vuelve a ser visible y el rastreo sigue encendido
-document.addEventListener('visibilitychange', async () => {
-  if (wakeLock !== null && document.visibilityState === 'visible' && toggleBtn && toggleBtn.classList.contains('on')) {
-    await requestWakeLock();
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try {
+      await wakeLock.release();
+    } catch (e) {
+      // no pasa nada si ya se había liberado solo
+    }
+    wakeLock = null;
   }
+}
+
+// Recuperación automática: cuando el chofer regresa a la pestaña (venía de
+// otra app, o encendió la pantalla), si la ubicación sigue "encendida" del
+// lado de la UI, reforzamos audio y wake lock por si el navegador los soltó.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Capacitor.isNativePlatform()) return;
+  if (!toggleBtn.classList.contains('on')) return;
+
+  if (keepAliveAudio && keepAliveAudio.paused) startKeepAliveAudio();
+  if (!wakeLock) requestWakeLock();
 });
 
 // ----- LOGIN CON PIN -----
@@ -344,15 +351,11 @@ function startSharing() {
     return;
   }
 
-  // Navegador normal
+  // Navegador normal (sin cambios)
   if (!navigator.geolocation) {
     statusText.textContent = 'Tu navegador no soporta geolocalización.';
     return;
   }
-
-  // ACTIVAR PANTALLA ENCENDIDA Y AUDIO DE PERSISTENCIA
-  requestWakeLock();
-  startBackgroundAudio();
 
   toggleBtn.classList.add('on');
   toggleLabel.innerHTML = 'Ubicación<br>activa';
@@ -360,9 +363,12 @@ function startSharing() {
 
   watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
     enableHighAccuracy: true,
-    maximumAge: 0,
+    maximumAge: 5000,
     timeout: 15000,
   });
+
+  startKeepAliveAudio();
+  requestWakeLock();
 }
 
 async function stopSharing() {
@@ -371,11 +377,9 @@ async function stopSharing() {
   } else if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+    stopKeepAliveAudio();
+    releaseWakeLock();
   }
-
-  // DESACTIVAR PANTALLA Y DETENER AUDIO
-  releaseWakeLock();
-  stopBackgroundAudio();
 
   toggleBtn.classList.remove('on');
   toggleLabel.innerHTML = 'Encender<br>ubicación';

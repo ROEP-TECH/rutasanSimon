@@ -254,8 +254,14 @@ async function renderDriversAndMap() {
         e.stopPropagation();
         const lat = parseFloat(viewLocBtn.dataset.lat);
         const lng = parseFloat(viewLocBtn.dataset.lng);
-        if (lat && lng) {
-          window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+        if (lat && lng && map) {
+          const latlng = L.latLng(lat, lng);
+          map.setView(latlng, 16);
+          if (driverMarkers[d.id]) {
+            driverMarkers[d.id].openPopup();
+          }
+          // Scroll al mapa
+          document.querySelector('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
     }

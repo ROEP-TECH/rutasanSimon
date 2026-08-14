@@ -368,19 +368,26 @@ async function renderRouteEvents() {
 
   const list = document.getElementById('routeEventsList');
   if (!events || events.length === 0) {
-    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>`;
+    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center py-6" style="color:var(--ink-soft);"><i data-lucide="inbox" class="w-5 h-5 mx-auto mb-2 opacity-40"></i>No hay avisos</p>`;
     return;
   }
 
-  list.innerHTML = events.map(ev => `
-    <div class="flex items-center gap-2.5">
-      <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 14%, var(--paper-2)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
-      <div class="min-w-0">
-        <p class="font-display font-semibold text-sm truncate">${ev.driver?.name || 'Conductor'} — ${ev.label || 'Aviso'}</p>
-        <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX') : '—'}${ev.route ? ' · ' + (ev.route === 'capilla' ? 'Por Capilla' : 'Por Secundaria') : ''}</p>
+  list.innerHTML = events.map(ev => {
+    const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '--';
+    const routeTxt = ev.route === 'capilla' ? 'Capilla' : (ev.route === 'secundaria' ? 'Secundaria' : '');
+    return `
+      <div class="event-card">
+        <div class="event-card-header">
+          <div class="flex-1">
+            <div class="event-card-title">${ev.driver?.name || 'Conductor'}</div>
+            <div class="text-xs mt-1" style="color:var(--ink-soft);">📢 ${ev.label || 'Aviso'}</div>
+          </div>
+          <span class="event-card-time">${time}</span>
+        </div>
+        ${routeTxt ? `<span class="event-card-route">📍 ${routeTxt}</span>` : ''}
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
   if (window.lucide) lucide.createIcons();
 }
 
@@ -410,7 +417,7 @@ async function renderChecadorEvents() {
 
   const list = document.getElementById('checadorEventsList');
   if (!events || events.length === 0) {
-    list.innerHTML = `<p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>`;
+    list.innerHTML = `<p id="checadorEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="check-circle-2" class="w-5 h-5 mx-auto mb-2 opacity-40"></i>Sin registros</p>`;
     return;
   }
 

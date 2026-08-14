@@ -82,9 +82,9 @@ function setupDriverNameField() {
   driverNameInput.value = currentDriver.name || '';
 }
 
-saveNameBtn.addEventListener('click', async () => {
+async function saveDriverName() {
   const newName = driverNameInput.value.trim();
-  if (!newName) return;
+  if (!newName || newName === currentDriver.name) return;
 
   const { error } = await supabase
     .from('drivers')
@@ -92,8 +92,21 @@ saveNameBtn.addEventListener('click', async () => {
     .eq('id', currentDriver.id);
 
   if (!error) {
-    nameSavedText.classList.remove('hidden');
-    setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
+    currentDriver.name = newName;
+    if (nameSavedText) {
+      nameSavedText.classList.remove('hidden');
+      setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
+    }
+  } else {
+    console.error('Error guardando nombre:', error);
+  }
+}
+
+driverNameInput.addEventListener('blur', saveDriverName);
+driverNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    driverNameInput.blur(); // dispara el guardado vía el listener de blur
   }
 });
 

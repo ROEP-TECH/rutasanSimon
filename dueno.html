@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0E80BE">
+<meta name="theme-color" content="#0A0E13">
 <title>Panel del Dueño · Ruta San Simón (R-18)</title>
 <meta name="robots" content="noindex, nofollow">
 
@@ -31,724 +31,303 @@
 <script type="module" src="dueno-logic.js"></script>
 
 <style>
-  /* Paleta mejorada con verde y blanco prominente */
+  /* ===== TOKENS — Panel de control de flota, modo oscuro ===== */
   :root{
-    --primary:#1BA098; 
-    --primary-dark:#137A71; 
-    --primary-light:#E7F8F6;
-    --accent:#0D9488;
-    --success:#10B981;
-    --warning:#F59E0B;
-    --alert:#DC2626;
-    --paper:#F8FCFA;
-    --paper-2:#FFFFFF;
-    --surface:#EFF9F7;
-    --ink:#1A3A35;
-    --ink-soft:#5A7B77;
-    --border:#D1E9E6;
-    --shadow: 0 1px 3px rgba(26,58,53,0.08), 0 4px 12px -4px rgba(26,58,53,0.12);
-    --shadow-md: 0 8px 24px -6px rgba(26,58,53,0.16);
+    --canvas:#0A0E13; --surface:#11161D; --surface-2:#171E27; --surface-3:#1D2530;
+    --ink:#EDF1F5; --ink-soft:#8A94A3; --ink-faint:#5C6572;
+    --border:#232B36; --border-soft:#1A212B;
+
+    --talavera:#3FB0F0; --talavera-dark:#1C86C4; --talavera-glow:rgba(63,176,240,.35);
+    --agave:#2FD98A; --agave-dark:#1FAE6D; --agave-glow:rgba(47,217,138,.35);
+    --cempasuchil:#FFAE33; --cempasuchil-dark:#E08E12; --cempasuchil-glow:rgba(255,174,51,.3);
+    --alerta:#FF5C4D; --alerta-dark:#D93E30; --alerta-bg:rgba(255,92,77,.14); --alerta-glow:rgba(255,92,77,.35);
+
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -12px rgba(0,0,0,.55);
+    --shadow-lg: 0 20px 50px -18px rgba(0,0,0,.65);
   }
-  
-  html{ scroll-behavior: smooth; }
   *{ -webkit-tap-highlight-color: transparent; }
-  
-  body{ 
-    background:var(--paper); 
-    color:var(--ink); 
-    font-family:'Plus Jakarta Sans', sans-serif;
-    line-height: 1.6;
-  }
-  
-  .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.01em; font-weight:600; }
-  .font-mono{ font-family:'JetBrains Mono', monospace; }
-  
-  .placard{ 
-    background:var(--paper-2); 
-    border:1px solid var(--border); 
-    border-radius:1rem; 
-    box-shadow:var(--shadow);
-    transition: all .3s cubic-bezier(.2,.8,.2,1);
-  }
-  .placard:hover{ box-shadow: var(--shadow-md); }
-  
-  #map{ 
-    height:360px; 
-    width:100%; 
-    background:var(--surface);
-    border-radius: 1rem;
-  }
-  
-  .leaflet-container{ 
-    font-family:'Plus Jakarta Sans', sans-serif; 
-    background:var(--surface) !important;
-    border-radius: 1rem;
-  }
-  
+  html{ color-scheme: dark; }
+  body{ background:var(--canvas); color:var(--ink); font-family:'Plus Jakarta Sans', sans-serif; }
+  .font-display{ font-family:'Sora', sans-serif; letter-spacing:-.015em; }
+  .font-mono{ font-family:'JetBrains Mono', monospace; letter-spacing:-.01em; }
   [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
 
-  /* Botones mejorados */
-  .btn-lift{ 
-    transition: all .25s cubic-bezier(.2,.8,.2,1); 
-    cursor: pointer;
-    border-radius: 0.75rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  /* Fondo ambiental sutil: rejilla de "ruta" + resplandor */
+  .bg-grid{
+    background-image:
+      radial-gradient(60rem 30rem at 15% -10%, rgba(63,176,240,.10), transparent 60%),
+      radial-gradient(50rem 26rem at 110% 10%, rgba(47,217,138,.07), transparent 55%),
+      linear-gradient(var(--border-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+    background-size: auto, auto, 42px 42px, 42px 42px;
+    background-position: 0 0, 0 0, -1px -1px, -1px -1px;
   }
-  .btn-lift:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .btn-lift:active{ transform: translateY(0) scale(.98); }
-  .btn-lift:focus{ outline: 2px solid var(--primary); outline-offset: 2px; }
 
-  .status-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
-  .status-dot.on{ background:var(--success); box-shadow:0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent); }
-  .status-dot.off{ background:var(--ink-soft); opacity:.4; }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:1.1rem; box-shadow:var(--shadow); }
+  .card-soft{ background:var(--surface-2); border:1px solid var(--border); border-radius:1rem; }
 
-  .driver-row{ 
-    border:1px solid var(--border);
-    border-radius: 0.875rem;
-    transition: all .2s ease;
-    padding: 1rem;
-    background:var(--paper-2);
-    margin-bottom: 0.75rem;
-  }
-  .driver-row:last-child{ margin-bottom: 0; }
-  .driver-row:hover{ 
-    background:var(--primary-light); 
-    border-color:var(--primary);
-    box-shadow: var(--shadow);
-    transform: translateY(-1px);
-  }
-  .driver-row.clickable{ cursor:pointer; }
-  
-  .driver-row.route-capilla{ border-left:4px solid var(--warning); }
-  .driver-row.route-secundaria{ border-left:4px solid var(--success); }
+  #map{ height:300px; width:100%; background:var(--surface-2); filter: saturate(.5) brightness(.62) contrast(1.05) invert(1) hue-rotate(180deg); }
+  .leaflet-container{ font-family:'Plus Jakarta Sans', sans-serif; background:var(--surface-2) !important; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:var(--surface-3); color:var(--ink); filter: invert(1) hue-rotate(180deg); }
+  .leaflet-control-zoom a{ background:var(--surface-3) !important; color:var(--ink) !important; border-color:var(--border) !important; }
 
-  .alert-card{ 
-    border: 2px solid var(--alert); 
-    background: #FEE2E2; 
-    border-radius: 0.875rem; 
-    transition: all .3s ease;
-    padding: 1rem;
-  }
-  .alert-card.resolved{ border-color:var(--border); background:var(--paper-2); opacity:.6; }
+  .btn-lift{ transition: all .2s cubic-bezier(.2,.8,.2,1); }
+  .btn-lift:hover{ transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+  .btn-lift:active{ transform: translateY(0) scale(.97); }
 
-  @keyframes flash{
-    0%, 100%{ background-color: #FEE2E2; }
-    50%{ background-color: #FBCCCB; }
-  }
+  .status-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-dot.on{ background:var(--agave); box-shadow:0 0 0 4px var(--agave-glow); }
+  .status-dot.off{ background:var(--ink-faint); }
+
+  @keyframes pulseDot{ 0%,100%{ box-shadow:0 0 0 0 var(--agave-glow);} 50%{ box-shadow:0 0 0 5px transparent; } }
+  .pulse-live{ animation: pulseDot 1.8s ease-in-out infinite; }
+
+  .driver-row{ border-bottom:1px solid var(--border-soft); transition: background-color .18s ease; }
+  .driver-row:last-child{ border-bottom:none; }
+  .driver-row:hover{ background:var(--surface-2); }
+
+  .alert-card{ border:1.5px solid var(--alerta); background:var(--alerta-bg); border-radius:1rem; transition: all .3s ease; }
+  .alert-card.resolved{ border-color:var(--border); background:var(--surface-2); opacity:.65; }
+
+  @keyframes flash{ 0%,100%{ background-color:var(--alerta-bg); } 50%{ background-color:rgba(255,92,77,.32); } }
   .alert-card.flashing{ animation: flash 1s ease-in-out 3; }
 
   #alarmBar{ display:none; }
   #alarmBar.show{ display:flex; }
-  @keyframes alarmPulse{
-    0%, 100%{ opacity:1; }
-    50%{ opacity:.7; }
-  }
-  #alarmBar.show{ 
-    animation: alarmPulse 1s ease-in-out infinite;
-    background: linear-gradient(135deg, var(--alert) 0%, #B91C1C 100%) !important;
-  }
+  @keyframes alarmPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
+  #alarmBar.show{ animation: alarmPulse 1s ease-in-out infinite; }
 
   #installBtn.show{ display:flex; }
 
-  .rss-marker-highlight > div{ animation: rssMarkerPulse 1s ease-in-out 3; }
-  @keyframes rssMarkerPulse{
-    0%, 100%{ box-shadow:0 2px 8px rgba(0,0,0,.5); transform:scale(1); }
-    50%{ box-shadow:0 0 0 12px color-mix(in srgb, var(--primary) 35%, transparent), 0 2px 8px rgba(0,0,0,.5); transform:scale(1.15); }
-  }
+  /* Franja de pulso de flota — elemento distintivo */
+  #fleetPulse{ scrollbar-width:none; }
+  #fleetPulse::-webkit-scrollbar{ display:none; }
+  .pulse-chip{ background:var(--surface-2); border:1px solid var(--border); border-radius:999px; white-space:nowrap; transition: transform .18s ease, border-color .18s ease; }
+  .pulse-chip:hover{ transform: translateY(-1px); border-color: var(--talavera); }
 
-  /* Toast mejorado */
-  #toast{
-    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
-    max-width:calc(100% - 2.5rem); z-index:90; opacity:0; pointer-events:none;
-    display:flex; align-items:center; gap:.75rem; padding:1rem 1.25rem; border-radius:1rem;
-    font-family:'Sora', sans-serif; font-weight:600; font-size:14px; color:#fff;
-    box-shadow: var(--shadow-md); transition: all .25s cubic-bezier(.2,.8,.2,1);
-    background:linear-gradient(135deg, var(--warning) 0%, #D97706 100%);
-  }
-  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
-  #toast.error{
-    background:linear-gradient(135deg, var(--alert) 0%, #B91C1C 100%);
-  }
-  #toast.success{
-    background:linear-gradient(135deg, var(--success) 0%, #059669 100%);
-  }
+  /* Barra lateral */
+  .nav-item{ color:var(--ink-soft); transition: all .18s ease; border-radius:.85rem; }
+  .nav-item:hover{ color:var(--ink); background:var(--surface-2); }
+  .nav-item.active{ color:var(--talavera); background:color-mix(in srgb, var(--talavera) 14%, var(--surface)); }
 
-  /* Responsive mejorado */
+  /* Drawer de conductor */
+  #driverDrawerOverlay{ background:rgba(5,7,10,.6); backdrop-filter: blur(2px); }
+  #driverDrawer{
+    box-shadow: -20px 0 50px -18px rgba(0,0,0,.7);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    transform: translateX(100%);
+  }
+  #driverDrawer.open{ transform: translateX(0); }
+  /* En móvil el drawer sube desde abajo como una hoja (bottom sheet), más cómodo con una sola mano */
   @media (max-width: 640px){
-    #map{ height: 280px; }
-    .placard{ border-radius: 0.875rem; }
-    body{ font-size: 15px; }
+    #driverDrawer{
+      top:auto; bottom:0; left:0; right:0; max-width:none; max-height:85vh;
+      border-radius:1.25rem 1.25rem 0 0; border-left:none; border-top:1px solid var(--border);
+      transform: translateY(100%);
+    }
+    #driverDrawer.open{ transform: translateY(0); }
   }
 
-  /* Inputs y focus states */
-  input[type="email"],
-  input[type="password"]{
-    transition: all .2s ease;
-  }
-  input[type="email"]:focus,
-  input[type="password"]:focus{
-    outline: none;
-    border-color: var(--primary) !important;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
-  }
-  
-  /* Secciones mejoradas */
-  section{ scroll-margin-top: 2rem; }
-  
-  .section-header{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    padding: 1.25rem;
-    border-bottom: 1px solid var(--border);
-  }
-  
-  .section-title{
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: .02em;
-    color: var(--primary);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  
-  /* Pestañas mejoradas */
-  .tab-btn{
-    flex: 1;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
-    font-family: 'Sora', sans-serif;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--ink-soft);
-    transition: all .2s ease;
-    border: 1.5px solid transparent;
-    cursor: pointer;
-  }
-  .tab-btn:hover{
-    background: var(--surface);
-  }
-  .tab-btn.active{
-    background: var(--primary-light);
-    color: var(--primary);
-    border-color: var(--primary);
-  }
-  
-  .tab-panel{
-    display: none;
-  }
-  .tab-panel.active{
-    display: block;
-  }
-  
-  /* Map legend */
-  .map-legend-dot{
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-  
-  /* KPI Cards mejoradas */
-  .kpi-card{
-    position: relative;
-    overflow: hidden;
-  }
-  .kpi-number{
-    font-family: 'Sora', sans-serif;
-    font-weight: 800;
-    font-size: 2.5rem;
-    line-height: 1.1;
-  }
-  .kpi-card.alert-live{
-    border-color: var(--alert);
-    background: #FEE2E2;
-  }
-  .kpi-card.alert-live .kpi-number{
-    color: var(--alert);
-  }
-  
-  @keyframes kpiAlertPulse{
-    0%, 100%{ box-shadow: var(--shadow); }
-    50%{ box-shadow: 0 0 0 6px color-mix(in srgb, var(--alert) 20%, transparent), var(--shadow); }
-  }
-  .kpi-card.alert-live{
-    animation: kpiAlertPulse 1.8s ease-in-out infinite;
-  }
-  
-  /* Botones prominentes */
-  .btn-primary{
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    color: #fff;
-  }
-  .btn-primary:hover{
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 30%, transparent);
-  }
-  
-  .btn-secondary{
-    background: var(--paper-2);
-    border: 1.5px solid var(--border);
-    color: var(--ink);
-  }
-  .btn-secondary:hover{
-    border-color: var(--primary);
-    color: var(--primary);
-  }
-  
-  /* Layout principal 2-columnas */
-  .main-grid{
-    display: grid;
-    gap: 1.5rem;
-    grid-template-columns: 1fr;
-  }
-  
-  .main-grid-lg{
-    grid-template-columns: 1.2fr 1fr;
-  }
-  
-  .map-container{
-    min-height: 420px;
-    border-radius: 1rem;
-  }
-  
-  .activity-panel{
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  /* Tarjetas de avisos mejoradas */
-  .event-card{
-    background: linear-gradient(135deg, var(--paper-2) 0%, var(--primary-light) 100%);
-    border: 1.5px solid var(--border);
-    border-radius: 1rem;
-    padding: 1rem;
-    transition: all .25s ease;
-    cursor: pointer;
-  }
-  
-  .event-card:hover{
-    transform: translateY(-2px);
-    border-color: var(--primary);
-    box-shadow: 0 6px 20px -2px rgba(27, 160, 152, 0.15);
-  }
-  
-  .event-card-header{
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-  }
-  
-  .event-card-title{
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
-    font-size: 14px;
-    color: var(--ink);
-  }
-  
-  .event-card-time{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    background: var(--primary-light);
-    color: var(--primary);
-    padding: 0.35rem 0.75rem;
-    border-radius: 0.5rem;
-    white-space: nowrap;
-  }
-  
-  .event-card-route{
-    display: inline-block;
-    padding: 0.4rem 0.8rem;
-    border-radius: 0.75rem;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--accent);
-    color: #fff;
-    margin-top: 0.5rem;
-  }
-  
-  .event-card-driver{
-    font-size: 13px;
-    color: var(--ink-soft);
-    margin-top: 0.5rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
-  }
-  
-  .event-card-driver strong{
-    color: var(--ink);
-  }
-  
-  /* Estadísticas mejoradas */
-  .stats-grid{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  
-  .stat-card{
-    background: linear-gradient(135deg, var(--paper-2) 0%, rgba(27, 160, 152, 0.04) 100%);
-    border: 1.5px solid var(--border);
-    border-radius: 1rem;
-    padding: 1.25rem;
-    text-align: center;
-    transition: all .25s ease;
-  }
-  
-  .stat-card:hover{
-    border-color: var(--primary);
-    transform: translateY(-1px);
-  }
-  
-  .stat-card.alert-live{
-    border-color: var(--alert);
-    background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%);
-  }
-  
-  .stat-label{
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--ink-soft);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  
-  .stat-number{
-    font-family: 'Sora', sans-serif;
-    font-weight: 800;
-    font-size: 2.75rem;
-    line-height: 1;
-    color: var(--primary);
-  }
-  
-  .stat-card.alert-live .stat-number{
-    color: var(--alert);
-  }
-  
-  .stat-sub{
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    margin-top: 0.5rem;
-  }
-  
-  /* Mejoras en checador */
-  .checador-row{
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 1rem;
-    align-items: center;
-    padding: 1rem;
-    background: var(--paper-2);
-    border: 1px solid var(--border);
-    border-radius: 0.875rem;
-    transition: all .2s ease;
-  }
-  
-  .checador-row:hover{
-    background: var(--primary-light);
-    border-color: var(--primary);
-  }
-  
-  .checador-status{
-    font-weight: 700;
-    font-size: 12px;
-    padding: 0.4rem 0.8rem;
-    border-radius: 0.75rem;
-  }
-  
-  .checador-status.ontime{
-    background: color-mix(in srgb, var(--success) 20%, var(--paper-2));
-    color: var(--success);
-  }
-  
-  .checador-status.late{
-    background: color-mix(in srgb, var(--warning) 20%, var(--paper-2));
-    color: var(--warning);
-  }
-  
-  .checador-status.absent{
-    background: color-mix(in srgb, var(--alert) 20%, var(--paper-2));
-    color: var(--alert);
-  }
-  
-  /* Grid responsive avanzado */
-  @media (min-width: 1024px){
-    #mainScreen{
-      max-width: 1280px;
-    }
-    .main-grid{
-      grid-template-columns: 1.2fr 1fr;
-    }
-    .map-container{
-      min-height: 520px;
-    }
-    .stats-grid{
-      grid-template-columns: 1fr;
-    }
-  }
-  
-  @media (min-width: 768px){
-    .stats-grid{
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  
-  @media (max-width: 767px){
-    .main-grid{
-      grid-template-columns: 1fr;
-    }
-    #mainScreen{
-      max-width: 100%;
-    }
-    .map-container{
-      min-height: 280px;
-    }
-    .placard{ border-radius: 0.875rem; }
-    body{ font-size: 14px; }
-    .section-header{
-      padding: 1rem;
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .stat-number{ font-size: 2rem; }
-    .kpi-number{ font-size: 2rem; }
-    .event-card{
-      padding: 0.875rem;
-    }
-  }
-  
-  @media (max-width: 640px){
-    .section-header{
-      padding: 0.875rem;
-      gap: 0.75rem;
-    }
-    .stats-grid{
-      grid-template-columns: 1fr;
-    }
-  }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--surface-3); border-radius:999px; }
+  ::selection{ background: var(--talavera-glow); }
+
+  input::placeholder{ color: var(--ink-faint); }
 
   @media (prefers-reduced-motion: reduce){
     *{ transition: none !important; animation: none !important; }
   }
 </style>
 </head>
-<body class="font-body pb-10">
-
-<!-- TOAST DE AVISO -->
-<div id="toast">
-  <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
-  <span id="toastText"></span>
-</div>
+<body class="font-body pb-10 bg-grid">
 
 <!-- PANTALLA DE LOGIN -->
-<div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 py-6">
-  <div class="placard p-8 w-full max-w-sm">
-    <!-- Logo -->
-    <div class="w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center" style="background:linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color:#fff;">
-      <i data-lucide="key-round" class="w-8 h-8"></i>
+<div id="loginScreen" class="min-h-screen flex items-center justify-center px-6">
+  <div class="card p-7 w-full max-w-sm text-center">
+    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">
+      <i data-lucide="key-round"></i>
     </div>
-    
-    <!-- Textos -->
-    <h1 class="font-display font-bold text-2xl text-center" style="color:var(--ink);">Panel del Dueño</h1>
-    <p class="text-sm mt-2 text-center" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
-    <p class="text-xs mt-3 text-center" style="color:var(--ink-soft);">Ingresa tus credenciales para continuar</p>
-    
-    <!-- Formulario -->
-    <div class="mt-7 space-y-4">
-      <div>
-        <label for="emailInput" class="text-sm font-semibold" style="color:var(--ink);">
-          <i data-lucide="mail" class="w-4 h-4 inline mr-1.5"></i>Correo electrónico
-        </label>
-        <input id="emailInput" 
-               type="email" 
-               placeholder="dueño@ruta.com"
-               class="mt-2 w-full text-base py-3 px-4 rounded-lg border transition-all"
-               style="background:var(--surface); border-color:var(--border); color:var(--ink);">
-      </div>
-      
-      <div>
-        <label for="passwordInput" class="text-sm font-semibold" style="color:var(--ink);">
-          <i data-lucide="lock" class="w-4 h-4 inline mr-1.5"></i>Contraseña
-        </label>
-        <input id="passwordInput" 
-               type="password" 
-               placeholder="••••••••"
-               class="mt-2 w-full text-base py-3 px-4 rounded-lg border transition-all"
-               style="background:var(--surface); border-color:var(--border); color:var(--ink);">
-      </div>
-      
-      <p id="loginError" class="text-sm mt-3 hidden p-3 rounded-lg flex items-center gap-2" style="color:var(--alert); background:#FEE2E2;">
-        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i> 
-        <span>Correo o contraseña incorrectos</span>
-      </p>
-      
-      <button id="loginSubmit" 
-              class="btn-lift w-full py-3 rounded-lg font-display font-semibold mt-6 text-base" 
-              style="background:linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color:#fff;">
-        <i data-lucide="arrow-right" class="w-4 h-4 mr-2"></i>Entrar
-      </button>
+    <h1 class="font-display font-semibold text-xl">Panel del Dueño</h1>
+    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+
+    <div class="mt-5 text-left">
+      <label class="text-xs font-semibold" style="color:var(--ink-soft);">Correo electrónico</label>
+      <input id="emailInput" type="email" placeholder="dueño@ruta.com"
+             class="mt-1 w-full text-center text-lg py-3 rounded-2xl border"
+             style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
     </div>
+    <div class="mt-3 text-left">
+      <label class="text-xs font-semibold" style="color:var(--ink-soft);">Contraseña</label>
+      <input id="passwordInput" type="password" placeholder="••••••••"
+             class="mt-1 w-full text-center text-lg py-3 rounded-2xl border"
+             style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
+    </div>
+
+    <p id="loginError" class="text-sm mt-2 hidden" style="color:var(--alerta);">Correo o contraseña incorrectos.</p>
+    <button id="loginSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Entrar</button>
   </div>
 </div>
 
 <!-- BARRA DE ALARMA -->
-<div id="alarmBar" role="alert" aria-live="assertive" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-4" style="background:linear-gradient(135deg, var(--alert) 0%, #B91C1C 100%); color:#fff;">
-  <span class="font-display font-semibold text-base flex items-center gap-2">
-    <i data-lucide="siren" class="w-5 h-5 animate-pulse"></i> 
-    <span>Alerta de ayuda activa</span>
-  </span>
-  <button id="silenceBtn" class="btn-lift text-xs font-semibold px-4 py-2 rounded-lg hover:bg-white/30" style="color:#fff;">
-    Silenciar
-  </button>
+<div id="alarmBar" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-3" style="background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;">
+  <span class="font-display font-semibold text-sm flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Alerta de ayuda activa</span>
+  <button id="silenceBtn" class="btn-lift text-xs font-semibold px-3 py-1.5 rounded-full" style="background:rgba(255,255,255,.2);">Silenciar</button>
 </div>
 
-<!-- PANEL PRINCIPAL -->
-<div id="mainScreen" class="hidden mx-auto px-3 md:px-4 pt-4 md:pt-6 pb-10 w-full" style="max-width: 1400px;">
-  <!-- HEADER -->
-  <header class="flex items-center justify-between gap-3 md:gap-4 pb-4 mb-5 border-b" style="border-color:var(--border);">
-    <button id="logoutBtn" 
-            aria-label="Cerrar sesión"
-            class="btn-lift flex items-center justify-center w-10 md:w-11 h-10 md:h-11 rounded-lg shrink-0" 
-            style="background:var(--paper-2); border:1.5px solid var(--border); color:var(--ink);">
-      <i data-lucide="log-out" class="w-5 h-5"></i>
-    </button>
-    <div class="flex-1 min-w-0">
-      <h1 class="font-display font-bold text-xl md:text-2xl" style="color:var(--primary);">Panel del Dueño</h1>
-      <p class="text-xs md:text-sm mt-0.5" style="color:var(--ink-soft);">
-        <i data-lucide="map-pin" class="w-3.5 h-3.5 md:w-4 md:h-4 inline mr-1"></i>Ruta San Simón · R-18
-      </p>
-    </div>
-    <button id="installBtn" 
-            aria-label="Instalar app"
-            class="btn-lift hidden items-center gap-1.5 px-4 md:px-5 h-10 md:h-11 rounded-lg font-display font-semibold text-xs md:text-sm shrink-0" 
-            style="background:linear-gradient(135deg, var(--warning) 0%, #D97706 100%); color:#fff;">
-      <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">Instalar</span>
-    </button>
-  </header>
+<!-- APP -->
+<div id="mainScreen" class="hidden min-h-screen md:flex">
 
-  <!-- ADVERTENCIA SUPABASE -->
-  <div id="supabaseWarning" role="alert" class="hidden placard p-4 mb-5 border-2" style="border-color:var(--alert); background:#FEE2E2; color:var(--alert);">
-    <div class="flex items-start gap-3">
-      <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5"></i>
-      <div>
-        <strong>⚠️ Configuración incompleta</strong>
-        <p class="text-sm mt-1" style="color:var(--alert);">Supabase no está configurado. Algunos datos podrían no sincronizarse.</p>
+  <!-- SIDEBAR -->
+  <aside class="hidden md:flex md:w-60 shrink-0 flex-col gap-1 p-4 border-r" style="border-color:var(--border); background:var(--surface);">
+    <div class="flex items-center gap-2.5 px-2 py-2 mb-4">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="bus" class="w-4.5 h-4.5"></i></div>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm leading-tight truncate">Ruta San Simón</p>
+        <p class="text-[11px] font-mono leading-tight" style="color:var(--ink-soft);">R-18 · Panel dueño</p>
       </div>
     </div>
-  </div>
 
-  <!-- GRID PRINCIPAL: MAPA + ACTIVIDAD -->
-  <div class="main-grid" style="grid-template-columns: 1fr;">
-    <!-- COLUMNA IZQUIERDA: MAPA -->
-    <div>
-      <section class="placard overflow-hidden shadow-lg">
-        <div class="section-header pb-3 md:pb-4">
-          <h2 class="section-title" style="color:var(--primary);"><i data-lucide="map" class="w-4 md:w-5 h-4 md:h-5"></i> Ubicación en vivo</h2>
-          <div class="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs font-semibold" style="color:var(--ink-soft);">
-            <span class="flex items-center gap-1.5 px-2 md:px-2.5 py-1 md:py-1.5 rounded-lg" style="background:var(--primary-light);">
-              <span class="map-legend-dot" style="background:#F59E0B; width:10px; height:10px;"></span>
-              <span class="hidden sm:inline">Capilla</span>
-            </span>
-            <span class="flex items-center gap-1.5 px-2 md:px-2.5 py-1 md:py-1.5 rounded-lg" style="background:var(--success-light);">
-              <span class="map-legend-dot" style="background:var(--success); width:10px; height:10px;"></span>
-              <span class="hidden sm:inline">Secundaria</span>
-            </span>
-          </div>
-        </div>
-        <div id="map" class="map-container border-t" style="border-color:var(--border);"></div>
-      </section>
+    <a href="#kpis" class="nav-item active flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Inicio</a>
+    <a href="#conductores" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
+    <a href="#checador" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Checador</a>
+    <a href="#avisos" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
+    <a href="#mapa" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
+    <a href="#alertas" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="bell" class="w-4 h-4"></i> Alertas</a>
+
+    <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
+      <button id="logoutBtnDesktop" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
+        <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
+      </button>
     </div>
+  </aside>
 
-    <!-- COLUMNA DERECHA: ESTADÍSTICAS + ACTIVIDAD -->
-    <div class="activity-panel" style="min-height: 420px;">
-      <!-- ESTADÍSTICAS -->
-      <section class="placard p-4 md:p-5">
-        <h3 class="section-title mb-3 md:mb-4" style="color:var(--primary);"><i data-lucide="activity" class="w-4 md:w-5 h-4 md:h-5"></i> Estado</h3>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label"><i data-lucide="navigation" class="w-3.5 h-3.5"></i> En línea</div>
-            <div class="stat-number" id="statOnlineNumber">—</div>
-            <div class="stat-sub" id="statOnlineSub">—</div>
-          </div>
-          <div id="statAlertsCard" class="stat-card">
-            <div class="stat-label"><i data-lucide="siren" class="w-3.5 h-3.5"></i> Alertas</div>
-            <div class="stat-number" id="statAlertsNumber" style="color:var(--ink);">—</div>
-            <div class="stat-sub" id="statAlertsSub">—</div>
-          </div>
+  <!-- MAIN -->
+  <main class="flex-1 min-w-0 max-w-5xl w-full mx-auto px-4 md:px-8 pt-6 pb-16 space-y-5">
+
+    <!-- HEADER -->
+    <header class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 md:hidden">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="bus" class="w-4 h-4"></i></div>
+        <div>
+          <p class="font-display font-semibold text-sm leading-tight">Panel del Dueño</p>
+          <p class="text-[10px] font-mono leading-tight" style="color:var(--ink-soft);">R-18</p>
         </div>
-      </section>
-
-      <!-- AVISOS DE RUTA -->
-      <section class="placard p-4 md:p-5 flex-1 flex flex-col overflow-hidden">
-        <h3 class="section-title mb-3 md:mb-4" style="color:var(--primary);"><i data-lucide="flag" class="w-4 md:w-5 h-4 md:h-5"></i> Avisos de ruta</h3>
-        <div id="routeEventsList" class="flex-1 overflow-y-auto space-y-2 md:space-y-3 pr-1 md:pr-2">
-          <p id="routeEventsEmpty" class="text-sm text-center py-4 md:py-6" style="color:var(--ink-soft);"><i data-lucide="inbox" class="w-5 h-5 md:w-6 md:h-6 mx-auto mb-2 opacity-40"></i>No hay avisos</p>
-        </div>
-      </section>
-    </div>
-  </div>
-
-  <!-- CONDUCTORES (Sección completa) -->
-  <section class="placard overflow-hidden mt-5">
-    <div class="section-header pb-3 md:pb-4">
-      <div class="flex-1 min-w-0">
-        <h2 class="section-title" style="color:var(--primary);"><i data-lucide="users" class="w-4 md:w-5 h-4 md:h-5"></i> Conductores</h2>
-        <p class="text-[10px] md:text-xs mt-1.5" style="color:var(--ink-soft);"><i data-lucide="mouse-pointer" class="w-3 h-3 inline mr-1"></i>Toca para ver en mapa</p>
       </div>
-      <div class="flex flex-col items-end gap-1">
-        <span id="driversOnlineCount" class="text-xl md:text-2xl font-display font-bold rounded-lg w-12 h-12 md:w-14 md:h-14 flex items-center justify-center" style="background:var(--primary-light); color:var(--primary);">0</span>
-        <span class="text-[10px]" style="color:var(--ink-soft);">conectados</span>
-      </div>
-    </div>
-    <div id="driversList" class="px-2 md:px-4 py-2 md:py-3 space-y-2 md:space-y-3"></div>
-    <div id="driversEmpty" class="text-sm text-center py-6 md:py-8" style="color:var(--ink-soft);">
-      <i data-lucide="user-x" class="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 opacity-40"></i>
-      <p class="text-xs md:text-sm">No hay conductores conectados</p>
-    </div>
-  </section>
 
-  <!-- CHECADOR Y ALERTAS EN FILA -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mt-5">
+      <div class="hidden md:flex items-center gap-2 flex-1 max-w-xs">
+        <div class="relative w-full">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--ink-faint);"></i>
+          <input id="driverSearchInput" type="text" placeholder="Buscar conductor…" class="w-full text-sm pl-9 pr-3 py-2 rounded-xl border" style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <span id="liveBadge" class="hidden sm:flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1.5 rounded-full" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink-soft);">
+          <span class="status-dot on pulse-live"></span> <span id="liveBadgeText">— en ruta</span>
+        </span>
+        <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Instalar</span>
+        </button>
+        <button id="logoutBtn" class="btn-lift md:hidden flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- BUSCADOR MÓVIL -->
+    <div class="relative md:hidden -mt-1">
+      <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--ink-faint);"></i>
+      <input id="driverSearchInputMobile" type="text" placeholder="Buscar conductor…" class="w-full text-sm pl-9 pr-3 py-2.5 rounded-xl border" style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
+    </div>
+
+    <!-- FRANJA DE PULSO DE FLOTA (elemento distintivo) -->
+    <div class="card-soft px-3.5 py-2.5">
+      <div class="flex items-center justify-between mb-1.5 px-0.5">
+        <p class="text-[10px] font-mono uppercase tracking-wider" style="color:var(--ink-faint);">Pulso de la flota, ahora</p>
+        <p id="fleetPulseCount" class="text-[10px] font-mono" style="color:var(--ink-soft);">—</p>
+      </div>
+      <div id="fleetPulse" class="flex items-center gap-1.5 overflow-x-auto pb-0.5"></div>
+    </div>
+
+    <div id="supabaseWarning" class="hidden card p-4 text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
+      Supabase no está configurado.
+    </div>
+
+    <!-- KPIs -->
+    <section id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 scroll-mt-6">
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="radio" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>En ruta</span></p>
+        <p id="kpiOnRoute" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--agave);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="clock-4" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>Puntualidad hoy</span></p>
+        <p id="kpiPunctuality" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--talavera);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>Avisos hoy</span></p>
+        <p id="kpiAvisos" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--cempasuchil);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="siren" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>Alertas activas</span></p>
+        <p id="kpiAlerts" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--alerta);">—</p>
+      </div>
+    </section>
+
+    <!-- CONDUCTORES -->
+    <section id="conductores" class="card p-4 scroll-mt-6">
+      <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+        <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
+        <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
+      </div>
+      <div id="driversList" class="divide-y" style="border-color:var(--border-soft);"></div>
+      <p id="driversEmpty" class="hidden text-sm text-center py-4" style="color:var(--ink-soft);">Ningún conductor coincide con tu búsqueda.</p>
+    </section>
+
     <!-- REGISTROS DEL CHECADOR -->
-    <section class="placard overflow-hidden">
-      <div class="section-header pb-3 md:pb-4">
-        <h2 class="section-title" style="color:var(--primary);"><i data-lucide="clipboard-check" class="w-4 md:w-5 h-4 md:h-5"></i> Registros</h2>
-      </div>
-      <div id="checadorEventsList" class="px-2 md:px-4 py-2 md:py-3 space-y-2 md:space-y-3 max-h-80 overflow-y-auto">
-        <p id="checadorEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="check-circle-2" class="w-5 h-5 mx-auto mb-2 opacity-40"></i>Sin registros hoy</p>
+    <section id="checador" class="card p-4 scroll-mt-6">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registros del checador</h2>
+      <div id="checadorEventsList" class="space-y-2.5">
+        <p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>
       </div>
     </section>
 
-    <!-- ALERTAS DE AYUDA -->
-    <section class="placard overflow-hidden">
-      <div class="section-header pb-3 md:pb-4">
-        <h2 class="section-title" style="color:var(--alert);"><i data-lucide="bell" class="w-4 md:w-5 h-4 md:h-5"></i> Alertas SOS</h2>
+    <!-- AVISOS DE RUTA -->
+    <section id="avisos" class="card p-4 scroll-mt-6">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-4 h-4"></i> Avisos recientes</h2>
+      <div id="routeEventsList" class="space-y-2.5">
+        <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
       </div>
-      <div id="alertsEmpty" class="p-4 md:p-6 text-sm text-center" style="color:var(--ink-soft);">
-        <i data-lucide="check-circle-2" class="w-6 h-6 md:w-8 md:h-8 mx-auto mb-2" style="color:var(--success);"></i>
-        <p class="text-xs md:text-sm">Sin alertas activas</p>
-      </div>
-      <div id="alertsList" class="px-2 md:px-4 py-2 md:py-3 space-y-2 md:space-y-3 max-h-80 overflow-y-auto"></div>
     </section>
-  </div>
+
+    <!-- MAPA -->
+    <section id="mapa" class="card overflow-hidden scroll-mt-6">
+      <div class="px-4 pt-4 pb-1">
+        <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
+      </div>
+      <div id="map"></div>
+    </section>
+
+    <!-- ALERTAS -->
+    <section id="alertas" class="scroll-mt-6">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Alertas de ayuda</h2>
+      <div id="alertsEmpty" class="card p-4 text-sm text-center flex items-center justify-center gap-1.5" style="color:var(--ink-soft);">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i> No hay alertas por ahora.
+      </div>
+      <div id="alertsList" class="space-y-2.5"></div>
+    </section>
+
+  </main>
 </div>
+
+<!-- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -->
+<div id="driverDrawerOverlay" class="hidden fixed inset-0 z-[90]"></div>
+<aside id="driverDrawer" class="hidden fixed top-0 right-0 z-[95] h-full w-full max-w-sm flex flex-col" style="background:var(--surface); border-left:1px solid var(--border);">
+  <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color:var(--border);">
+    <h3 class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Ficha del conductor</h3>
+    <button id="driverDrawerClose" class="btn-lift w-8 h-8 rounded-full flex items-center justify-center" style="background:var(--surface-2); border:1px solid var(--border);"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </div>
+  <div id="driverDrawerContent" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"></div>
+</aside>
 
 </body>
 </html>

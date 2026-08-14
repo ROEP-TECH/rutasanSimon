@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+  (function(){
+    try{
+      var t = localStorage.getItem('rss_theme');
+      document.documentElement.setAttribute('data-theme', (t === 'light') ? 'light' : 'dark');
+    }catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+  })();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0A0E13">
@@ -45,6 +53,29 @@
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -12px rgba(0,0,0,.55);
     --shadow-lg: 0 20px 50px -18px rgba(0,0,0,.65);
   }
+
+  /* ===== TEMA CLARO — misma marca, sin neón, fondo cálido de papel ===== */
+  html[data-theme="light"]{
+    color-scheme: light;
+    --canvas:#FAF7F0; --surface:#FFFFFF; --surface-2:#F4EEDC; --surface-3:#EDE4C8;
+    --ink:#221B12; --ink-soft:#7C7261; --ink-faint:#9C9280;
+    --border:#E4DBC5; --border-soft:#EFE8D4;
+
+    --talavera:#0E80BE; --talavera-dark:#0A5F8E; --talavera-glow:rgba(14,128,190,.22);
+    --agave:#1E9E5A; --agave-dark:#147A43; --agave-glow:rgba(30,158,90,.22);
+    --cempasuchil:#F5900C; --cempasuchil-dark:#CB7208; --cempasuchil-glow:rgba(245,144,12,.22);
+    --alerta:#E1483A; --alerta-dark:#B93627; --alerta-bg:rgba(225,72,58,.12); --alerta-glow:rgba(225,72,58,.22);
+
+    --shadow: 0 1px 2px rgba(34,27,18,.06), 0 10px 26px -14px rgba(34,27,18,.18);
+    --shadow-lg: 0 20px 45px -18px rgba(34,27,18,.2);
+  }
+  /* En claro, el mapa ya combina de por sí — quitamos la inversión pensada para fondo oscuro */
+  html[data-theme="light"] #map{ filter: none; }
+  html[data-theme="light"] .leaflet-popup-content-wrapper,
+  html[data-theme="light"] .leaflet-popup-tip{ filter: none; }
+  .theme-toggle-btn .theme-icon-moon{ display:none; }
+  html[data-theme="light"] .theme-toggle-btn .theme-icon-sun{ display:none; }
+  html[data-theme="light"] .theme-toggle-btn .theme-icon-moon{ display:flex; }
   *{ -webkit-tap-highlight-color: transparent; }
   html{ color-scheme: dark; }
   body{ background:var(--canvas); color:var(--ink); font-family:'Plus Jakarta Sans', sans-serif; }
@@ -110,6 +141,18 @@
   .nav-item:hover{ color:var(--ink); background:var(--surface-2); }
   .nav-item.active{ color:var(--talavera); background:color-mix(in srgb, var(--talavera) 14%, var(--surface)); }
 
+  /* Menú móvil (hamburguesa) — mismos enlaces que la barra lateral de escritorio */
+  #mobileNavOverlay{ background:rgba(5,7,10,.6); backdrop-filter: blur(2px); }
+  #mobileNavPanel{
+    box-shadow: 20px 0 50px -18px rgba(0,0,0,.7);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    transform: translateX(-100%);
+  }
+  #mobileNavPanel.open{ transform: translateX(0); }
+  .mobile-nav-item{ color:var(--ink-soft); transition: all .18s ease; border-radius:.85rem; }
+  .mobile-nav-item:hover{ color:var(--ink); background:var(--surface-2); }
+  .mobile-nav-item.active{ color:var(--talavera); background:color-mix(in srgb, var(--talavera) 14%, var(--surface)); }
+
   /* Drawer de conductor */
   #driverDrawerOverlay{ background:rgba(5,7,10,.6); backdrop-filter: blur(2px); }
   #driverDrawer{
@@ -143,7 +186,11 @@
 
 <!-- PANTALLA DE LOGIN -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center px-6">
-  <div class="card p-7 w-full max-w-sm text-center">
+  <div class="card p-7 w-full max-w-sm text-center relative">
+    <button class="theme-toggle-btn btn-lift absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink-soft);">
+      <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+      <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+    </button>
     <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">
       <i data-lucide="key-round"></i>
     </div>
@@ -206,10 +253,13 @@
 
     <!-- HEADER -->
     <header class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 md:hidden">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="bus" class="w-4 h-4"></i></div>
-        <div>
-          <p class="font-display font-semibold text-sm leading-tight">Panel del Dueño</p>
+      <div class="flex items-center gap-2 md:hidden min-w-0">
+        <button id="mobileNavOpen" aria-label="Abrir menú" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <i data-lucide="menu" class="w-4 h-4"></i>
+        </button>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="bus" class="w-4 h-4"></i></div>
+        <div class="min-w-0">
+          <p class="font-display font-semibold text-sm leading-tight truncate">Panel del Dueño</p>
           <p class="text-[10px] font-mono leading-tight" style="color:var(--ink-soft);">R-18</p>
         </div>
       </div>
@@ -227,6 +277,10 @@
         </span>
         <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
           <i data-lucide="download" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Instalar</span>
+        </button>
+        <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+          <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
         </button>
         <button id="logoutBtn" class="btn-lift md:hidden flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
           <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -319,6 +373,34 @@
   </main>
 </div>
 
+<!-- MENÚ MÓVIL (hamburguesa) -->
+<div id="mobileNavOverlay" class="hidden fixed inset-0 z-[90] md:hidden"></div>
+<aside id="mobileNavPanel" class="hidden fixed top-0 left-0 z-[95] h-full w-72 max-w-[80vw] flex-col gap-1 p-4 md:hidden" style="background:var(--surface); border-right:1px solid var(--border); display:flex;">
+  <div class="flex items-center justify-between gap-2.5 px-2 py-2 mb-4">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="bus" class="w-4.5 h-4.5"></i></div>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm leading-tight truncate">Ruta San Simón</p>
+        <p class="text-[11px] font-mono leading-tight" style="color:var(--ink-soft);">R-18 · Panel dueño</p>
+      </div>
+    </div>
+    <button id="mobileNavClose" aria-label="Cerrar menú" class="btn-lift w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border);"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </div>
+
+  <a href="#kpis" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Inicio</a>
+  <a href="#conductores" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
+  <a href="#checador" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Checador</a>
+  <a href="#avisos" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
+  <a href="#mapa" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
+  <a href="#alertas" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="bell" class="w-4 h-4"></i> Alertas</a>
+
+  <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
+    <button id="logoutBtnMobileNav" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
+      <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
+    </button>
+  </div>
+</aside>
+
 <!-- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -->
 <div id="driverDrawerOverlay" class="hidden fixed inset-0 z-[90]"></div>
 <aside id="driverDrawer" class="hidden fixed top-0 right-0 z-[95] h-full w-full max-w-sm flex flex-col" style="background:var(--surface); border-left:1px solid var(--border);">
@@ -329,5 +411,14 @@
   <div id="driverDrawerContent" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"></div>
 </aside>
 
+<script>
+  document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try{ localStorage.setItem('rss_theme', next); }catch(e){}
+    });
+  });
+</script>
 </body>
 </html>

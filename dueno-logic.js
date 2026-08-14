@@ -13,6 +13,7 @@ let mapInitialized = false; // Evita que el mapa se duplique
 // Caché en memoria de la última carga, para alimentar el drawer y las búsquedas sin volver a pedir datos
 let lastDrivers = [];
 let lastChecadorEvents = [];
+let lastRouteEvents = []; // checkpoints que reporta el propio conductor (salió/llegó), para mostrarlos en su ficha
 let driverSearchTerm = '';
 
 // Elementos DOM
@@ -81,7 +82,9 @@ async function doLogout() {
   mapInitialized = false; // Reiniciamos el flag al cerrar sesión
   lastDrivers = [];
   lastChecadorEvents = [];
+  lastRouteEvents = [];
   closeDriverDrawer();
+  closeMobileNav();
   mainScreen.classList.add('hidden');
   mainScreen.classList.remove('md:flex');
   loginScreen.classList.remove('hidden');
@@ -90,6 +93,7 @@ async function doLogout() {
 }
 document.getElementById('logoutBtn').addEventListener('click', doLogout);
 document.getElementById('logoutBtnDesktop').addEventListener('click', doLogout);
+document.getElementById('logoutBtnMobileNav').addEventListener('click', doLogout);
 
 // ----- BUSCADOR DE CONDUCTORES -----
 const driverSearchInput = document.getElementById('driverSearchInput');
@@ -128,7 +132,7 @@ function driverIcon(route) {
   const color = route === 'secundaria' ? '#2FD98A' : (route === 'capilla' ? '#FFAE33' : '#3FB0F0');
   return L.divIcon({
     className: '',
-    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #11161D;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.6);">🚐</div>`,
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>`,
     iconSize: [34, 34],
     iconAnchor: [17, 17],
   });
@@ -193,6 +197,7 @@ function openDriverDrawer(driverId) {
   const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
 
   const todaysEvents = lastChecadorEvents.filter(ev => ev.driver_id === d.id || ev.driver?.name === d.name);
+  const ownEvents = lastRouteEvents.filter(ev => ev.driver_id === d.id);
 
   const statusInfo = {
     a_tiempo: { label: 'A tiempo', icon: 'check-circle-2', color: 'var(--agave)' },
@@ -211,6 +216,21 @@ function openDriverDrawer(driverId) {
           </div>`;
       }).join('')
     : `<p class="text-xs" style="color:var(--ink-faint);">Sin registros del checador hoy.</p>`;
+
+  // "Registros propios": lo último que el conductor reportó él mismo desde su panel
+  // (salió/llegó de cada base). route_events guarda un solo renglón por conductor
+  // (se sobrescribe cada vez que reporta), así que mostramos su último aviso.
+  const ownEventsHtml = ownEvents.length
+    ? ownEvents.map(ev => {
+        const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
+        const routeTxt = ev.route === 'capilla' ? 'Por Capilla' : (ev.route === 'secundaria' ? 'Por Secundaria' : '');
+        return `
+          <div class="flex items-center gap-2.5 py-1.5">
+            <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="flag" class="w-3.5 h-3.5"></i></span>
+            <p class="text-xs" style="color:var(--ink-soft);"><span class="font-semibold" style="color:var(--talavera);">${ev.label || 'Aviso'}</span> · ${time}${routeTxt ? ' · ' + routeTxt : ''}</p>
+          </div>`;
+      }).join('')
+    : `<p class="text-xs" style="color:var(--ink-faint);">Este conductor todavía no ha reportado ninguna parada.</p>`;
 
   let locText = 'Sin conexión';
   if (fresh) {
@@ -241,6 +261,11 @@ function openDriverDrawer(driverId) {
     <div>
       <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Checador hoy</p>
       <div class="card-soft p-3">${eventsHtml}</div>
+    </div>
+
+    <div>
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Registros propios del conductor</p>
+      <div class="card-soft p-3">${ownEventsHtml}</div>
     </div>
 
     <div class="flex gap-2 pt-1">
@@ -521,6 +546,8 @@ async function renderRouteEvents() {
   const { data: events, error } = await query;
   if (error) { console.error('Error cargando route_events:', error); return; }
 
+  lastRouteEvents = events || [];
+
   const list = document.getElementById('routeEventsList');
   if (!events || events.length === 0) {
     list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>`;
@@ -695,10 +722,41 @@ document.getElementById('silenceBtn').addEventListener('click', () => {
   document.getElementById('alarmBar').classList.remove('show');
 });
 
-// ----- NAVEGACIÓN LATERAL: marcar el enlace activo según la sección visible -----
-const navLinks = Array.from(document.querySelectorAll('aside .nav-item'));
+// ----- MENÚ MÓVIL (hamburguesa): el sidebar de escritorio estaba oculto por completo en
+// pantallas chicas (hidden md:flex) y no había forma de llegar a Conductores/Checador/etc.
+// sin hacer scroll a ciegas. Este panel reutiliza los mismos enlaces como una hoja lateral.
+const mobileNavOpenBtn = document.getElementById('mobileNavOpen');
+const mobileNavCloseBtn = document.getElementById('mobileNavClose');
+const mobileNavOverlay = document.getElementById('mobileNavOverlay');
+const mobileNavPanel = document.getElementById('mobileNavPanel');
+
+function openMobileNav() {
+  mobileNavOverlay.classList.remove('hidden');
+  mobileNavPanel.classList.remove('hidden');
+  void mobileNavPanel.offsetHeight; // forzar reflow para que la transición siempre anime
+  mobileNavPanel.classList.add('open');
+}
+
+let mobileNavCloseTimeout = null;
+function closeMobileNav() {
+  mobileNavPanel.classList.remove('open');
+  mobileNavOverlay.classList.add('hidden');
+  clearTimeout(mobileNavCloseTimeout);
+  mobileNavCloseTimeout = setTimeout(() => mobileNavPanel.classList.add('hidden'), 300);
+}
+
+if (mobileNavOpenBtn) mobileNavOpenBtn.addEventListener('click', openMobileNav);
+if (mobileNavCloseBtn) mobileNavCloseBtn.addEventListener('click', closeMobileNav);
+if (mobileNavOverlay) mobileNavOverlay.addEventListener('click', closeMobileNav);
+// Cerrar el menú al tocar cualquier enlace (ancla a una sección)
+document.querySelectorAll('#mobileNavPanel a.mobile-nav-item').forEach((a) => {
+  a.addEventListener('click', closeMobileNav);
+});
+
+// ----- NAVEGACIÓN: marcar el enlace activo (escritorio Y móvil) según la sección visible -----
+const navLinks = Array.from(document.querySelectorAll('aside .nav-item, #mobileNavPanel .mobile-nav-item'));
 if (navLinks.length) {
-  const sectionIds = navLinks.map(a => a.getAttribute('href').slice(1));
+  const sectionIds = [...new Set(navLinks.map(a => a.getAttribute('href').slice(1)))];
   const sections = sectionIds.map(id => document.getElementById(id)).filter(Boolean);
 
   const observer = new IntersectionObserver((entries) => {

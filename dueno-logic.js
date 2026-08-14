@@ -104,35 +104,38 @@ function driverIcon(route) {
 
 // ----- TOAST DE AVISO -----
 let toastTimeout = null;
-function showToast(message) {
+function showToast(message, type = 'normal') {
   const toast = document.getElementById('toast');
   const toastText = document.getElementById('toastText');
   if (!toast || !toastText) return;
   toastText.textContent = message;
+  toast.classList.remove('error', 'success');
+  if (type === 'error') toast.classList.add('error');
+  else if (type === 'success') toast.classList.add('success');
   toast.classList.add('show');
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 // ----- CENTRAR Y RESALTAR A UN CONDUCTOR EN EL MAPA (al tocarlo en la lista) -----
-function focusDriverOnMap(driverId, driverName, isFresh) {
-  const marker = driverMarkers[driverId];
-
-  if (!isFresh || !marker) {
-    showToast(`${driverName} no tiene ubicación en vivo en este momento.`);
+function focusDriverOnMap(driverId, driverName, isFresh, location) {
+  if (!isFresh || !location) {
+    showToast(`⚠️ ${driverName} está sin conexión - No hay ubicación disponible`, 'error');
     return;
   }
 
-  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  map.setView(marker.getLatLng(), 16, { animate: true });
-  marker.openPopup();
+  if (driverMarkers[driverId]) {
+    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    map.setView(driverMarkers[driverId].getLatLng(), 16, { animate: true });
+    driverMarkers[driverId].openPopup();
 
-  const el = marker.getElement();
-  if (el) {
-    el.classList.remove('rss-marker-highlight');
-    void el.offsetWidth; // fuerza reflow para poder reiniciar la animación
-    el.classList.add('rss-marker-highlight');
-    setTimeout(() => el.classList.remove('rss-marker-highlight'), 3200);
+    const el = driverMarkers[driverId].getElement();
+    if (el) {
+      el.classList.remove('rss-marker-highlight');
+      void el.offsetWidth;
+      el.classList.add('rss-marker-highlight');
+      setTimeout(() => el.classList.remove('rss-marker-highlight'), 3200);
+    }
   }
 }
 
@@ -246,37 +249,72 @@ async function renderDriversAndMap() {
     }
 
     row.innerHTML = `
-      <div class="min-w-0 flex items-center gap-2.5 cursor-pointer">
-        <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 14%, var(--paper-2)); color:var(--talavera);"><i data-lucide="user" class="w-4 h-4"></i></span>
-        <div class="min-w-0">
-          <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(Unidad ${d.unit?.unit_number || '?'})</span></p>
-          <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
-          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block" style="background:${routeColor}; color:#fff;">${routeLabel}</span>
+      <div class="flex flex-col gap-3 w-full">
+        <!-- Info del conductor -->
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--primary) 16%, var(--paper-2)); color:var(--primary);">
+            <i data-lucide="user" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <p class="font-display font-semibold text-sm" style="color:var(--ink);">${d.name}</p>
+              <span class="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full" style="background:${fresh ? 'var(--success-light)' : '#FEE2E2'}; color:${fresh ? 'var(--success)' : '#DC2626'};">
+                <span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En línea' : 'Sin conexión'}
+              </span>
+            </div>
+            <p class="text-xs font-mono mb-2" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
+            ${fresh && location ? `<p class="text-xs font-mono mb-2" style="color:var(--ink-soft);">${locText}</p>` : ''}
+            <span class="text-xs font-semibold px-2 py-1 rounded-lg inline-block" style="background:color-mix(in srgb, ${routeColor} 15%, transparent); color:${routeColor}; border:1px solid ${routeColor}33;">${routeLabel}</span>
+          </div>
+        </div>
+        <!-- Botones -->
+        <div class="flex gap-2 pt-2 border-t" style="border-color:var(--border);">
+          <button class="view-location-btn btn-lift flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg ${fresh ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}" 
+                  style="background:${fresh ? 'var(--primary-light)' : '#F3F4F6'}; color:${fresh ? 'var(--primary)' : 'var(--ink-soft)'};"
+                  data-driver-id="${d.id}" 
+                  data-driver-name="${d.name}" 
+                  data-is-fresh="${fresh}"
+                  ${fresh ? '' : 'disabled'}>
+            <i data-lucide="${fresh ? 'map-pin' : 'map-x'}" class="w-4 h-4"></i> 
+            ${fresh ? 'Ver ubicación' : 'Sin ubicación'}
+          </button>
+          <button class="center-map-btn btn-lift px-3 py-2 rounded-lg" style="background:var(--paper-2); border:1.5px solid var(--border); color:var(--ink);" aria-label="Centrar mapa en ${d.name}" ${fresh ? '' : 'disabled style="opacity:0.5;"'}>
+            <i data-lucide="map" class="w-4 h-4"></i>
+          </button>
         </div>
       </div>
-      <span class="flex items-center gap-1.5 text-xs font-semibold shrink-0">
-        <span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}
-      </span>
     `;
+    
     row.classList.add('clickable');
-    row.addEventListener('click', () => focusDriverOnMap(d.id, d.name, fresh));
     list.appendChild(row);
 
-    // Evento click para ir al mapa
-    if (fresh && location && location.lat && location.lng) {
-      row.addEventListener('click', () => {
-        const latlng = L.latLng(location.lat, location.lng);
-        map.setView(latlng, 16);
-        if (driverMarkers[d.id]) {
-          driverMarkers[d.id].openPopup();
-        }
-        // Scroll suave al mapa
-        setTimeout(() => {
-          document.querySelector('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 300);
+    // Botón "Ver ubicación"
+    const viewLocBtn = row.querySelector('.view-location-btn');
+    if (viewLocBtn && fresh && location) {
+      viewLocBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        focusDriverOnMap(d.id, d.name, fresh, location);
       });
-      row.style.cursor = 'pointer';
     }
+
+    // Botón "Centrar mapa"
+    const centerMapBtn = row.querySelector('.center-map-btn');
+    if (centerMapBtn && fresh && location) {
+      centerMapBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        focusDriverOnMap(d.id, d.name, fresh, location);
+      });
+    }
+
+    // Evento click en la tarjeta completa
+    row.addEventListener('click', () => {
+      if (fresh && location) {
+        focusDriverOnMap(d.id, d.name, fresh, location);
+      } else {
+        showToast(`⚠️ ${d.name} está sin conexión`, 'error');
+      }
+    });
+    row.style.cursor = fresh ? 'pointer' : 'default';
 
     if (fresh && location && location.lat && location.lng) {
       const latlng = [location.lat, location.lng];

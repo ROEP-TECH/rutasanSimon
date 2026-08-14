@@ -129,9 +129,15 @@
     display:flex; align-items:center; gap:.55rem; padding:.85rem 1.1rem; border-radius:1.1rem;
     font-family:'Sora', sans-serif; font-weight:600; font-size:13.5px; color:#fff;
     box-shadow: var(--shadow-md); transition: all .25s cubic-bezier(.2,.8,.2,1);
-    background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%);
+    background:linear-gradient(135deg, var(--warning) 0%, #D97706 100%);
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  #toast.error{
+    background:linear-gradient(135deg, var(--alerta) 0%, #B91C1C 100%);
+  }
+  #toast.success{
+    background:linear-gradient(135deg, var(--success) 0%, #059669 100%);
+  }
 
   @media (prefers-reduced-motion: reduce){
     *{ transition: none !important; animation: none !important; }

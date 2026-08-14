@@ -29,6 +29,62 @@ let watchId = null;
 let locationChannel = null;
 let eventChannel = null;
 
+// ==========================================
+// PERSISTENCIA EN SEGUNDO PLANO (WAKE LOCK + AUDIO)
+// ==========================================
+let wakeLock = null;
+let backgroundAudio = null;
+
+// Inicializa o reproduce el audio para evitar suspensión en segundo plano
+function startBackgroundAudio() {
+  const existingAudio = document.getElementById('trackingAudio');
+  if (existingAudio) {
+    backgroundAudio = existingAudio;
+  } else if (!backgroundAudio) {
+    // Si no existe el tag <audio id="trackingAudio"> en el HTML, usamos un Audio sintético por defecto
+    backgroundAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    backgroundAudio.loop = true;
+  }
+  
+  backgroundAudio.currentTime = 0;
+  backgroundAudio.play().catch(err => {
+    console.warn('El navegador requirió interacción previa para reproducir el audio:', err);
+  });
+}
+
+function stopBackgroundAudio() {
+  if (backgroundAudio) {
+    backgroundAudio.pause();
+    backgroundAudio.currentTime = 0;
+  }
+}
+
+// Mantiene la pantalla encendida mientras la app esté activa
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+    } catch (err) {
+      console.warn('No se pudo activar Screen Wake Lock:', err);
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock !== null) {
+    wakeLock.release().then(() => {
+      wakeLock = null;
+    });
+  }
+}
+
+// Reactiva el Wake Lock si la pestaña vuelve a ser visible y el rastreo sigue encendido
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible' && toggleBtn && toggleBtn.classList.contains('on')) {
+    await requestWakeLock();
+  }
+});
+
 // ----- LOGIN CON PIN -----
 document.getElementById('pinSubmit').addEventListener('click', tryPin);
 pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPin(); });
@@ -288,11 +344,15 @@ function startSharing() {
     return;
   }
 
-  // Navegador normal (sin cambios)
+  // Navegador normal
   if (!navigator.geolocation) {
     statusText.textContent = 'Tu navegador no soporta geolocalización.';
     return;
   }
+
+  // ACTIVAR PANTALLA ENCENDIDA Y AUDIO DE PERSISTENCIA
+  requestWakeLock();
+  startBackgroundAudio();
 
   toggleBtn.classList.add('on');
   toggleLabel.innerHTML = 'Ubicación<br>activa';
@@ -300,7 +360,7 @@ function startSharing() {
 
   watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
     enableHighAccuracy: true,
-    maximumAge: 5000,
+    maximumAge: 0,
     timeout: 15000,
   });
 }
@@ -312,6 +372,10 @@ async function stopSharing() {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
   }
+
+  // DESACTIVAR PANTALLA Y DETENER AUDIO
+  releaseWakeLock();
+  stopBackgroundAudio();
 
   toggleBtn.classList.remove('on');
   toggleLabel.innerHTML = 'Encender<br>ubicación';
@@ -379,121 +443,5 @@ async function sendPanicAlert(lat, lng) {
     console.error('Error enviando alerta de pánico:', error);
     document.getElementById('panicStepAsk').classList.add('hidden');
     document.getElementById('panicStepError').classList.remove('hidden');
-  }
-}
-import { supabase } from './supabase-config.js';
-
-// ... (se mantienen tus variables iniciales)
-let currentDriver = null;
-let watchId = null;
-let locationChannel = null;
-let eventChannel = null;
-
-// ==========================================
-// ESTRATEGIA DE PERSISTENCIA (WAKE LOCK + SILENT AUDIO)
-// ==========================================
-let wakeLock = null;
-let silentAudio = null;
-
-// Inicializa o reproduce el audio silencioso generado dinámicamente
-function startSilentAudio() {
-  if (!silentAudio) {
-    // Genera un buffer de audio silencioso en formato Base64 de 1 segundo
-    silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-    silentAudio.loop = true;
-  }
-  silentAudio.play().catch(err => {
-    console.warn('El reproductor automático de audio silencioso requiere interacción:', err);
-  });
-}
-
-function stopSilentAudio() {
-  if (silentAudio) {
-    silentAudio.pause();
-    silentAudio.currentTime = 0;
-  }
-}
-
-// Mantiene la pantalla encendida automáticamente mientras la app esté abierta
-async function requestWakeLock() {
-  if ('wakeLock' in navigator) {
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-    } catch (err) {
-      console.warn('No se pudo activar Screen Wake Lock:', err);
-    }
-  }
-}
-
-function releaseWakeLock() {
-  if (wakeLock !== null) {
-    wakeLock.release().then(() => {
-      wakeLock = null;
-    });
-  }
-}
-
-// Si la pestaña vuelve a ser visible y la ubicación estaba activa, reactiva el WakeLock
-document.addEventListener('visibilitychange', async () => {
-  if (wakeLock !== null && document.visibilityState === 'visible' && toggleBtn.classList.contains('on')) {
-    await requestWakeLock();
-  }
-});
-
-// ==========================================
-// UBICACIÓN EN VIVO (ACTUALIZADO)
-// ==========================================
-
-function startSharing() {
-  if (navigator.vibrate) navigator.vibrate(20);
-
-  if (Capacitor.isNativePlatform()) {
-    startSharingNative();
-    return;
-  }
-
-  if (!navigator.geolocation) {
-    statusText.textContent = 'Tu navegador no soporta geolocalización.';
-    return;
-  }
-
-  // --- MANTENER VIVA LA APP EN SEGUNDO PLANO / PANTALLA SUSPENDIDA ---
-  requestWakeLock();
-  startSilentAudio();
-
-  toggleBtn.classList.add('on');
-  toggleLabel.innerHTML = 'Ubicación<br>activa';
-  statusText.textContent = 'Los pasajeros ya pueden ver tu combi en el mapa.';
-
-  watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
-    enableHighAccuracy: true,
-    maximumAge: 0,        // Forza al GPS a buscar posición real sin usar caché
-    timeout: 10000,
-  });
-}
-
-async function stopSharing() {
-  if (Capacitor.isNativePlatform()) {
-    await stopSharingNative();
-  } else if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
-
-  // --- LIBERAR RECURSOS DE BATERÍA Y PANTALLA ---
-  releaseWakeLock();
-  stopSilentAudio();
-
-  toggleBtn.classList.remove('on');
-  toggleLabel.innerHTML = 'Encender<br>ubicación';
-  statusText.textContent = 'Presiona el botón para que los pasajeros vean tu combi.';
-
-  const { error } = await supabase
-    .from('live_locations')
-    .update({ updated_at: null })
-    .eq('driver_id', currentDriver.id);
-
-  if (error) {
-    console.error('Error apagando ubicación en live_locations:', error);
   }
 }

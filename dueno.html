@@ -38,7 +38,7 @@
     --accent:#0D9488; --accent-dark:#0F766E;
     --success:#10B981; --success-light:#ECFDF5;
     --warning:#F59E0B; --warning-light:#FFFBEB;
-    --alert:#DC2626; --alert-light:#FEE2E2;
+    --alerta:#DC2626; --alerta-bg:#FEE2E2;
     --border:#D1E9E6;
     --shadow: 0 1px 3px rgba(26,58,53,0.08), 0 4px 12px -4px rgba(26,58,53,0.12);
     --shadow-md: 0 8px 24px -6px rgba(26,58,53,0.16);
@@ -83,17 +83,6 @@
   .btn-lift:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .btn-lift:active{ transform: translateY(0) scale(.98); }
   .btn-lift:focus{ outline: 2px solid var(--primary); outline-offset: 2px; }
-  
-  .btn-primary{
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    color: #fff;
-  }
-  
-  .btn-secondary{
-    background: var(--paper-2);
-    border: 1.5px solid var(--border);
-    color: var(--ink);
-  }
 
   /* Inputs mejorados */
   input[type="email"],
@@ -121,8 +110,8 @@
   .driver-row:hover{ background:var(--primary-light); border-radius: 0.75rem; padding: 0.75rem 0.5rem; }
 
   .alert-card{ 
-    border: 2px solid var(--alert); 
-    background: var(--alert-light); 
+    border: 2px solid var(--alerta); 
+    background: var(--alerta-bg); 
     border-radius: 0.875rem; 
     transition: all .3s ease;
     padding: 1rem;
@@ -130,7 +119,7 @@
   .alert-card.resolved{ border-color:var(--border); background:var(--paper-2); opacity:.6; }
 
   @keyframes flash{
-    0%, 100%{ background-color: var(--alert-light); }
+    0%, 100%{ background-color: var(--alerta-bg); }
     50%{ background-color: #FBCCCB; }
   }
   .alert-card.flashing{ animation: flash 1s ease-in-out 3; }
@@ -143,7 +132,7 @@
   }
   #alarmBar.show{ 
     animation: alarmPulse 1s ease-in-out infinite;
-    background: linear-gradient(135deg, var(--alert) 0%, #B91C1C 100%);
+    background: linear-gradient(135deg, var(--alerta) 0%, #B91C1C 100%) !important;
   }
 
   #installBtn.show{ display:flex; }
@@ -203,8 +192,6 @@
         <input id="emailInput" 
                type="email" 
                placeholder="dueño@ruta.com"
-               aria-label="Correo electrónico"
-               required
                class="mt-2 w-full text-base py-3 px-4 rounded-xl border"
                style="background:var(--surface); border-color:var(--border); color:var(--ink);">
       </div>
@@ -217,8 +204,6 @@
         <input id="passwordInput" 
                type="password" 
                placeholder="••••••••"
-               aria-label="Contraseña"
-               required
                class="mt-2 w-full text-base py-3 px-4 rounded-xl border"
                style="background:var(--surface); border-color:var(--border); color:var(--ink);">
       </div>
@@ -226,15 +211,14 @@
       <!-- Error -->
       <p id="loginError" 
          class="text-sm mt-3 hidden flex items-center gap-2 p-3 rounded-lg" 
-         role="alert"
-         style="color:var(--alert); background:var(--alert-light);">
+         style="color:var(--alerta); background:var(--alerta-bg);">
         <i data-lucide="alert-circle" class="w-4 h-4"></i> Correo o contraseña incorrectos.
       </p>
       
       <!-- Botón -->
       <button id="loginSubmit" 
-              aria-label="Iniciar sesión"
-              class="btn-lift btn-primary w-full py-3 rounded-xl font-display font-semibold mt-6">
+              class="btn-lift w-full py-3 rounded-xl font-display font-semibold mt-6" 
+              style="background:linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color:#fff;">
         <i data-lucide="arrow-right" class="w-4 h-4 mr-2"></i>Entrar
       </button>
     </div>
@@ -242,13 +226,12 @@
 </div>
 
 <!-- BARRA DE ALARMA -->
-<div id="alarmBar" role="alert" aria-live="assertive" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-4" style="background:linear-gradient(135deg, var(--alert) 0%, #B91C1C 100%); color:#fff;">
+<div id="alarmBar" role="alert" aria-live="assertive" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-4" style="background:linear-gradient(135deg, var(--alerta) 0%, #B91C1C 100%); color:#fff;">
   <span class="font-display font-semibold text-sm flex items-center gap-2">
-    <i data-lucide="siren" class="w-5 h-5 animate-spin"></i> 
+    <i data-lucide="siren" class="w-5 h-5"></i> 
     <span>Alerta de ayuda activa</span>
   </span>
   <button id="silenceBtn" 
-          aria-label="Silenciar alerta"
           class="btn-lift text-xs font-semibold px-4 py-2 rounded-full hover:bg-white/30 transition-colors">
     Silenciar
   </button>
@@ -259,8 +242,8 @@
   <!-- Header -->
   <header class="flex items-center justify-between gap-3 mb-6">
     <button id="logoutBtn" 
-            aria-label="Cerrar sesión"
-            class="btn-lift btn-secondary flex items-center justify-center w-10 h-10 rounded-full shrink-0">
+            class="btn-lift flex items-center justify-center w-10 h-10 rounded-full shrink-0" 
+            style="background:var(--paper-2); border:1.5px solid var(--border); color:var(--ink);">
       <i data-lucide="log-out" class="w-5 h-5"></i>
     </button>
     <div class="text-center flex-1">
@@ -270,7 +253,6 @@
       </p>
     </div>
     <button id="installBtn" 
-            aria-label="Instalar app"
             class="btn-lift hidden items-center gap-1.5 px-4 h-10 rounded-full font-display font-semibold text-sm shrink-0" 
             style="background:linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color:#fff;">
       <i data-lucide="download" class="w-4 h-4"></i> Instalar
@@ -281,7 +263,7 @@
   <div id="supabaseWarning" 
        role="alert"
        class="hidden placard p-4 border-2 text-sm" 
-       style="border-color:var(--alert); background:var(--alert-light); color:var(--alert);">
+       style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
     <div class="flex items-start gap-3">
       <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5"></i>
       <div>
@@ -292,56 +274,47 @@
   </div>
 
   <!-- CONDUCTORES EN LÍNEA -->
-  <section aria-labelledby="driversTitle" class="placard p-6">
+  <section class="placard p-6">
     <div class="flex items-center justify-between mb-4 gap-3">
-      <h2 id="driversTitle" class="font-display font-bold text-lg flex items-center gap-2" style="color:var(--primary);">
+      <h2 class="font-display font-bold text-lg flex items-center gap-2" style="color:var(--primary);">
         <i data-lucide="users" class="w-5 h-5"></i> Conductores en línea
       </h2>
       <span id="driversOnlineCount" 
             class="text-2xl font-display font-bold rounded-full w-10 h-10 flex items-center justify-center" 
-            style="background:var(--primary-light); color:var(--primary);">
-        0
-      </span>
+            style="background:var(--primary-light); color:var(--primary);">0</span>
     </div>
     <div id="driversList" class="space-y-0"></div>
-    <p id="driversEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);">
-      <i data-lucide="user-x" class="w-4 h-4 inline mr-2"></i>No hay conductores en línea
-    </p>
+    <p id="driversEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="user-x" class="w-4 h-4 inline mr-2"></i>No hay conductores en línea</p>
   </section>
 
   <!-- REGISTROS DEL CHECADOR -->
-  <section aria-labelledby="checadorTitle" class="placard p-6">
-    <h2 id="checadorTitle" class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
+  <section class="placard p-6">
+    <h2 class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
       <i data-lucide="clipboard-check" class="w-5 h-5"></i> Registros del checador
     </h2>
     <div id="checadorEventsList" class="space-y-2">
-      <p id="checadorEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);">
-        <i data-lucide="calendar-off" class="w-4 h-4 inline mr-2"></i>Sin registros hoy
-      </p>
+      <p id="checadorEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="calendar-off" class="w-4 h-4 inline mr-2"></i>Sin registros hoy</p>
     </div>
   </section>
 
   <!-- AVISOS DE RUTA -->
-  <section aria-labelledby="routeTitle" class="placard p-6">
-    <h2 id="routeTitle" class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
+  <section class="placard p-6">
+    <h2 class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
       <i data-lucide="flag" class="w-5 h-5"></i> Avisos de conductores
     </h2>
     <div id="routeEventsList" class="space-y-2">
-      <p id="routeEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);">
-        <i data-lucide="inbox" class="w-4 h-4 inline mr-2"></i>Sin avisos por ahora
-      </p>
+      <p id="routeEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="inbox" class="w-4 h-4 inline mr-2"></i>Sin avisos por ahora</p>
     </div>
   </section>
 
   <!-- MAPA -->
-  <section aria-labelledby="mapTitle" class="placard overflow-hidden">
-    <h2 id="mapTitle" class="sr-only">Mapa de ruta en tiempo real</h2>
+  <section class="placard overflow-hidden">
     <div id="map"></div>
   </section>
 
   <!-- ALERTAS DE AYUDA -->
-  <section aria-labelledby="alertsTitle">
-    <h2 id="alertsTitle" class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
+  <section>
+    <h2 class="font-display font-bold text-lg mb-4 flex items-center gap-2" style="color:var(--primary);">
       <i data-lucide="bell" class="w-5 h-5"></i> Alertas de ayuda
     </h2>
     <div id="alertsEmpty" class="placard p-6 text-sm text-center flex items-center justify-center gap-2" style="color:var(--ink-soft);">

@@ -102,12 +102,27 @@
   .status-dot.off{ background:var(--ink-soft); opacity:.4; }
 
   .driver-row{ 
-    border-bottom:1px solid var(--border); 
+    border:1px solid var(--border);
+    border-radius: 0.875rem;
     transition: all .2s ease;
-    padding: 0.75rem 0;
+    padding: 1rem;
+    background:var(--paper-2);
   }
-  .driver-row:last-child{ border-bottom:none; }
-  .driver-row:hover{ background:var(--primary-light); border-radius: 0.75rem; padding: 0.75rem 0.5rem; }
+  .driver-row:hover{ 
+    background:var(--primary-light); 
+    border-color:var(--primary);
+    box-shadow: var(--shadow);
+  }
+  
+  .view-location-btn:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(27,160,152,0.2);
+  }
+  
+  .center-map-btn:hover{
+    border-color: var(--primary);
+    color: var(--primary);
+  }
 
   .alert-card{ 
     border: 2px solid var(--alerta); 
@@ -275,16 +290,19 @@
 
   <!-- CONDUCTORES EN LÍNEA -->
   <section class="placard p-6">
-    <div class="flex items-center justify-between mb-4 gap-3">
+    <div class="flex items-center justify-between mb-5 gap-3">
       <h2 class="font-display font-bold text-lg flex items-center gap-2" style="color:var(--primary);">
         <i data-lucide="users" class="w-5 h-5"></i> Conductores en línea
       </h2>
       <span id="driversOnlineCount" 
-            class="text-2xl font-display font-bold rounded-full w-10 h-10 flex items-center justify-center" 
-            style="background:var(--primary-light); color:var(--primary);">0</span>
+            class="text-xl font-display font-bold rounded-full w-12 h-12 flex items-center justify-center" 
+            style="background:var(--primary-light); color:var(--primary); font-size:1.5rem;">0</span>
     </div>
-    <div id="driversList" class="space-y-0"></div>
-    <p id="driversEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="user-x" class="w-4 h-4 inline mr-2"></i>No hay conductores en línea</p>
+    <div id="driversList" class="space-y-3"></div>
+    <div id="driversEmpty" class="text-sm text-center py-6" style="color:var(--ink-soft);">
+      <i data-lucide="user-x" class="w-6 h-6 mx-auto mb-2 opacity-50"></i>
+      <p>No hay conductores en línea</p>
+    </div>
   </section>
 
   <!-- REGISTROS DEL CHECADOR -->

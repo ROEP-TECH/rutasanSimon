@@ -6,7 +6,6 @@ const mainScreen = document.getElementById('mainScreen');
 const pinInput = document.getElementById('pinInput');
 const pinError = document.getElementById('pinError');
 const driverNameInput = document.getElementById('driverNameInput');
-const saveNameBtn = document.getElementById('saveNameBtn');
 const nameSavedText = document.getElementById('nameSavedText');
 const checkpointBtn = document.getElementById('checkpointBtn');
 const checkpointSavedText = document.getElementById('checkpointSavedText');
@@ -69,7 +68,6 @@ function goToPinScreen() {
   pinInput.value = '';
 }
 
-document.getElementById('switchDriverBtn').addEventListener('click', goToPinScreen);
 document.getElementById('backToPinBtn').addEventListener('click', goToPinScreen);
 
 // ----- NOMBRE DEL CONDUCTOR -----
@@ -77,9 +75,9 @@ function setupDriverNameField() {
   driverNameInput.value = currentDriver.name || '';
 }
 
-saveNameBtn.addEventListener('click', async () => {
+async function saveDriverName() {
   const newName = driverNameInput.value.trim();
-  if (!newName) return;
+  if (!newName || newName === (currentDriver.name || '')) return;
 
   const { error } = await supabase
     .from('drivers')
@@ -87,9 +85,15 @@ saveNameBtn.addEventListener('click', async () => {
     .eq('id', currentDriver.id);
 
   if (!error) {
+    currentDriver.name = newName;
     nameSavedText.classList.remove('hidden');
     setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
   }
+}
+
+driverNameInput.addEventListener('blur', saveDriverName);
+driverNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { driverNameInput.blur(); }
 });
 
 // ----- RAMAL ASIGNADO -----

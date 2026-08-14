@@ -8,7 +8,12 @@ let locationChannel = null;
 let routeChannel = null;
 let alertChannel = null;
 let checadorEventsChannel = null;
-let mapInitialized = false; // <--- ESTO ES NUEVO (Evita que el mapa se duplique)
+let mapInitialized = false; // Evita que el mapa se duplique
+
+// Caché en memoria de la última carga, para alimentar el drawer y las búsquedas sin volver a pedir datos
+let lastDrivers = [];
+let lastChecadorEvents = [];
+let driverSearchTerm = '';
 
 // Elementos DOM
 const loginScreen = document.getElementById('loginScreen');
@@ -53,18 +58,19 @@ async function tryLogin() {
   loginError.classList.add('hidden');
   loginScreen.classList.add('hidden');
   mainScreen.classList.remove('hidden');
-  
+  mainScreen.classList.add('md:flex');
+
   // Inicializar mapa SOLO si no se ha creado antes
   if (!mapInitialized) {
     initMap();
   }
-  
+
   initRealtimeListeners();
   if (window.lucide) lucide.createIcons();
 }
 
 // ----- CIERRE DE SESIÓN -----
-document.getElementById('logoutBtn').addEventListener('click', async () => {
+async function doLogout() {
   await supabase.auth.signOut();
   if (locationChannel) supabase.removeChannel(locationChannel);
   if (routeChannel) supabase.removeChannel(routeChannel);
@@ -73,105 +79,238 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   currentUser = null;
   currentOwner = null;
   mapInitialized = false; // Reiniciamos el flag al cerrar sesión
+  lastDrivers = [];
+  lastChecadorEvents = [];
+  closeDriverDrawer();
   mainScreen.classList.add('hidden');
+  mainScreen.classList.remove('md:flex');
   loginScreen.classList.remove('hidden');
   emailInput.value = '';
   passwordInput.value = '';
-});
+}
+document.getElementById('logoutBtn').addEventListener('click', doLogout);
+document.getElementById('logoutBtnDesktop').addEventListener('click', doLogout);
+
+// ----- BUSCADOR DE CONDUCTORES -----
+const driverSearchInput = document.getElementById('driverSearchInput');
+const driverSearchInputMobile = document.getElementById('driverSearchInputMobile');
+function onDriverSearch(e) {
+  driverSearchTerm = e.target.value.trim().toLowerCase();
+  // Mantenemos ambos campos sincronizados (escritorio/móvil)
+  if (driverSearchInput && driverSearchInput.value !== e.target.value) driverSearchInput.value = e.target.value;
+  if (driverSearchInputMobile && driverSearchInputMobile.value !== e.target.value) driverSearchInputMobile.value = e.target.value;
+  renderDriversList();
+}
+if (driverSearchInput) driverSearchInput.addEventListener('input', onDriverSearch);
+if (driverSearchInputMobile) driverSearchInputMobile.addEventListener('input', onDriverSearch);
 
 // ----- MAPA (Leaflet) -----
 function initMap() {
   if (mapInitialized) return; // Si ya existe, no hacer nada
-  
+
   map = L.map('map', { zoomControl: true, attributionControl: false }).setView([19.272, -98.455], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
   L.control.attribution({ prefix: false })
     .addAttribution('© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
     .addTo(map);
-    
+
   mapInitialized = true; // Marcamos que ya se creó
 }
 
+function routeLabelFor(route) {
+  return route === 'capilla' ? 'Por Capilla' : route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal';
+}
+function routeColorFor(route) {
+  return route === 'capilla' ? 'var(--cempasuchil)' : route === 'secundaria' ? 'var(--agave)' : 'var(--ink-faint)';
+}
+
 function driverIcon(route) {
-  const color = route === 'secundaria' ? '#1E9E5A' : (route === 'capilla' ? '#F5900C' : '#2C9E4A');
+  const color = route === 'secundaria' ? '#2FD98A' : (route === 'capilla' ? '#FFAE33' : '#3FB0F0');
   return L.divIcon({
     className: '',
-    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚐</div>`,
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #11161D;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.6);">🚐</div>`,
     iconSize: [34, 34],
     iconAnchor: [17, 17],
   });
 }
 
-// ----- TOAST DE AVISO -----
+// ----- MENSAJE FLOTANTE (TOAST) -----
 let toastTimeout = null;
-function showToast(message, type = 'normal') {
-  const toast = document.getElementById('toast');
-  const toastText = document.getElementById('toastText');
-  if (!toast || !toastText) return;
-  toastText.textContent = message;
-  toast.classList.remove('error', 'success');
-  if (type === 'error') toast.classList.add('error');
-  else if (type === 'success') toast.classList.add('success');
-  toast.classList.add('show');
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
-}
-
-// ----- CENTRAR Y RESALTAR A UN CONDUCTOR EN EL MAPA (al tocarlo en la lista) -----
-function focusDriverOnMap(driverId, driverName, isFresh, location) {
-  if (!isFresh || !location) {
-    showToast(`⚠️ ${driverName} está sin conexión - No hay ubicación disponible`, 'error');
-    return;
+function showToast(message) {
+  let toast = document.getElementById('rssToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'rssToast';
+    toast.style.cssText = `
+      position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+      background:var(--surface-3); color:var(--ink); border:1px solid var(--border);
+      font-family:'Plus Jakarta Sans', sans-serif;
+      font-size:13px; font-weight:600; padding:10px 16px; border-radius:999px;
+      box-shadow:0 10px 30px -10px rgba(0,0,0,.6); z-index:200; opacity:0;
+      transition:opacity .25s ease, transform .25s ease; pointer-events:none; max-width:85vw;
+      text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    `;
+    document.body.appendChild(toast);
   }
 
-  if (driverMarkers[driverId]) {
-    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    map.setView(driverMarkers[driverId].getLatLng(), 16, { animate: true });
-    driverMarkers[driverId].openPopup();
+  toast.textContent = message;
+  clearTimeout(toastTimeout);
 
-    const el = driverMarkers[driverId].getElement();
-    if (el) {
-      el.classList.remove('rss-marker-highlight');
-      void el.offsetWidth;
-      el.classList.add('rss-marker-highlight');
-      setTimeout(() => el.classList.remove('rss-marker-highlight'), 3200);
-    }
-  }
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+  });
+
+  toastTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-50%) translateY(20px)';
+  }, 2200);
 }
+
+// ----- CENTRAR MAPA EN UN CONDUCTOR ESPECÍFICO -----
+function goToDriverOnMap(driverId) {
+  const marker = driverMarkers[driverId];
+  if (!map || !marker) return;
+
+  map._rssCentered = true; // evita que el auto-ajuste general le gane a este zoom
+  map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.75 });
+  marker.openPopup();
+
+  const mapEl = document.getElementById('map');
+  if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ----- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -----
+const driverDrawer = document.getElementById('driverDrawer');
+const driverDrawerOverlay = document.getElementById('driverDrawerOverlay');
+const driverDrawerContent = document.getElementById('driverDrawerContent');
+
+function openDriverDrawer(driverId) {
+  const d = lastDrivers.find(x => x.id === driverId);
+  if (!d) return;
+
+  const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+  const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+
+  const todaysEvents = lastChecadorEvents.filter(ev => ev.driver_id === d.id || ev.driver?.name === d.name);
+
+  const statusInfo = {
+    a_tiempo: { label: 'A tiempo', icon: 'check-circle-2', color: 'var(--agave)' },
+    retraso: { label: 'Llegó tarde', icon: 'clock', color: 'var(--cempasuchil)' },
+    no_se_presento: { label: 'No se presentó', icon: 'alert-triangle', color: 'var(--alerta)' },
+  };
+
+  const eventsHtml = todaysEvents.length
+    ? todaysEvents.map(ev => {
+        const info = statusInfo[ev.status] || { label: ev.status || '—', icon: 'circle', color: 'var(--ink-soft)' };
+        const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
+        return `
+          <div class="flex items-center gap-2.5 py-1.5">
+            <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, ${info.color} 16%, var(--surface)); color:${info.color};"><i data-lucide="${info.icon}" class="w-3.5 h-3.5"></i></span>
+            <p class="text-xs" style="color:var(--ink-soft);"><span class="font-semibold" style="color:${info.color};">${info.label}</span> · ${time}${ev.ubicacion ? ' · ' + ev.ubicacion : ''}</p>
+          </div>`;
+      }).join('')
+    : `<p class="text-xs" style="color:var(--ink-faint);">Sin registros del checador hoy.</p>`;
+
+  let locText = 'Sin conexión';
+  if (fresh) {
+    locText = `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+  } else if (location && location.updated_at) {
+    locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+  }
+
+  driverDrawerContent.innerHTML = `
+    <div class="flex items-center gap-3">
+      <span class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-display font-bold text-lg" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-base truncate">${d.name}</p>
+        <p class="text-xs font-mono" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full" style="background:${routeColorFor(d.route)}; color:#08131c;">${routeLabelFor(d.route)}</span>
+      <span class="flex items-center gap-1.5 text-xs font-semibold" style="color:var(--ink-soft);"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}</span>
+    </div>
+
+    <div class="card-soft p-3">
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1" style="color:var(--ink-faint);">Última ubicación</p>
+      <p class="text-xs font-mono" style="color:var(--ink-soft);">${locText}</p>
+    </div>
+
+    <div>
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Checador hoy</p>
+      <div class="card-soft p-3">${eventsHtml}</div>
+    </div>
+
+    <div class="flex gap-2 pt-1">
+      <button id="drawerGoToMap" class="btn-lift flex-1 text-xs font-semibold px-3.5 py-2.5 rounded-full flex items-center justify-center gap-1.5" style="background:var(--talavera); color:#08131c;" ${fresh ? '' : 'disabled'}>
+        <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver en el mapa
+      </button>
+    </div>
+    ${!fresh ? `<p class="text-[11px] text-center" style="color:var(--ink-faint);">Este conductor no tiene ubicación en vivo disponible.</p>` : ''}
+  `;
+
+  const goBtn = document.getElementById('drawerGoToMap');
+  if (goBtn && fresh) {
+    goBtn.addEventListener('click', () => {
+      closeDriverDrawer();
+      goToDriverOnMap(d.id);
+    });
+  } else if (goBtn) {
+    goBtn.style.opacity = '.5';
+    goBtn.style.cursor = 'not-allowed';
+  }
+
+  driverDrawer.classList.remove('hidden');
+  driverDrawerOverlay.classList.remove('hidden');
+  // Forzamos reflow para que la transición de apertura se anime siempre, incluso si ya estaba montado
+  void driverDrawer.offsetHeight;
+  driverDrawer.classList.add('open');
+  if (window.lucide) lucide.createIcons();
+}
+
+let drawerCloseTimeout = null;
+function closeDriverDrawer() {
+  driverDrawer.classList.remove('open');
+  driverDrawerOverlay.classList.add('hidden');
+  clearTimeout(drawerCloseTimeout);
+  drawerCloseTimeout = setTimeout(() => {
+    driverDrawer.classList.add('hidden');
+  }, 300);
+}
+document.getElementById('driverDrawerClose').addEventListener('click', closeDriverDrawer);
+driverDrawerOverlay.addEventListener('click', closeDriverDrawer);
 
 // ----- ESCUCHAR DATOS EN TIEMPO REAL -----
 function initRealtimeListeners() {
-  // 1. Ubicaciones en vivo
   locationChannel = supabase
     .channel('locations-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, 
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' },
       () => { renderDriversAndMap(); }
     )
     .subscribe((status, err) => {
       console.log('[Realtime] live_locations:', status, err || '');
     });
 
-  // 2. Eventos de ruta
   routeChannel = supabase
     .channel('route-events-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'route_events' }, 
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'route_events' },
       () => { renderRouteEvents(); }
     )
     .subscribe((status, err) => {
       console.log('[Realtime] route_events:', status, err || '');
     });
 
-  // 3. Alertas de pánico
   alertChannel = supabase
     .channel('alerts-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'panic_alerts' }, 
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'panic_alerts' },
       () => { renderAlerts(); }
     )
     .subscribe((status, err) => {
       console.log('[Realtime] panic_alerts:', status, err || '');
     });
 
-  // 4. Registros del checador (checadas de salida)
   checadorEventsChannel = supabase
     .channel('checador-events-channel')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'checador_events' },
@@ -193,7 +332,7 @@ async function renderDriversAndMap() {
   if (!currentOwner) return;
 
   const isAdmin = currentOwner.role === 'admin';
-  
+
   let query = supabase
     .from('drivers')
     .select(`
@@ -202,42 +341,65 @@ async function renderDriversAndMap() {
       live_location:live_locations ( lat, lng, heading, speed, updated_at )
     `);
 
-  // Si NO es admin, filtramos para que solo vea sus propias unidades
   if (!isAdmin) {
     query = query.eq('owner_id', currentOwner.id);
   }
 
   const { data: drivers, error } = await query;
-  
+
   if (error) {
     console.error("Error al cargar conductores:", error);
     return;
   }
 
+  lastDrivers = drivers || [];
+  renderDriversList();
+  renderFleetPulse();
+}
+
+// ----- LISTA DE CONDUCTORES (separado para poder filtrar por búsqueda sin recargar datos) -----
+function renderDriversList() {
   const list = document.getElementById('driversList');
+  const emptyMsg = document.getElementById('driversEmpty');
   list.innerHTML = '';
+
+  const term = driverSearchTerm;
+  const visibleDrivers = term
+    ? lastDrivers.filter(d => (d.name || '').toLowerCase().includes(term))
+    : lastDrivers;
 
   let onlineCount = 0;
   let capillaCount = 0;
   let secundariaCount = 0;
 
-  drivers.forEach(d => {
+  // Recalculamos siempre sobre el total (no solo lo filtrado) para que el contador sea real
+  lastDrivers.forEach(d => {
     const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
-    const fresh = location && location.updated_at && 
+    const fresh = location && location.updated_at &&
       (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
-
     if (fresh) onlineCount++;
     if (d.route === 'capilla') capillaCount++;
     else if (d.route === 'secundaria') secundariaCount++;
+  });
 
-    const row = document.createElement('div');
-    row.className = 'driver-row py-3 px-3 flex items-center justify-between gap-2';
-    if (d.route === 'capilla') row.classList.add('route-capilla');
-    else if (d.route === 'secundaria') row.classList.add('route-secundaria');
-    const routeLabel = d.route === 'capilla' ? 'Por Capilla' : 
-                       d.route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal';
-    const routeColor = d.route === 'capilla' ? '#F5900C' : 
-                       d.route === 'secundaria' ? '#1E9E5A' : 'var(--ink-soft)';
+  document.getElementById('driversOnlineCount').textContent =
+    onlineCount + ' en ruta · ' + capillaCount + ' Capilla · ' + secundariaCount + ' Sec.';
+  document.getElementById('kpiOnRoute').textContent = `${onlineCount}/${lastDrivers.length}`;
+  document.getElementById('liveBadgeText').textContent = `${onlineCount} en ruta`;
+
+  if (visibleDrivers.length === 0) {
+    emptyMsg.classList.remove('hidden');
+  } else {
+    emptyMsg.classList.add('hidden');
+  }
+
+  visibleDrivers.forEach(d => {
+    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+    const fresh = location && location.updated_at &&
+      (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+
+    const routeLabel = routeLabelFor(d.route);
+    const routeColor = routeColorFor(d.route);
 
     let locText = 'Sin conexión';
     if (fresh) {
@@ -248,73 +410,43 @@ async function renderDriversAndMap() {
       locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
     }
 
+    const row = document.createElement('div');
+    row.className = 'driver-row py-3 flex items-center justify-between gap-1.5 sm:gap-2 cursor-pointer';
+    row.dataset.driverId = d.id;
+
     row.innerHTML = `
-      <div class="flex flex-col gap-3 w-full">
-        <!-- Info del conductor -->
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--primary) 16%, var(--paper-2)); color:var(--primary);">
-            <i data-lucide="user" class="w-5 h-5"></i>
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <p class="font-display font-semibold text-sm" style="color:var(--ink);">${d.name}</p>
-              <span class="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full" style="background:${fresh ? 'var(--success-light)' : '#FEE2E2'}; color:${fresh ? 'var(--success)' : '#DC2626'};">
-                <span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En línea' : 'Sin conexión'}
-              </span>
-            </div>
-            <p class="text-xs font-mono mb-2" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
-            ${fresh && location ? `<p class="text-xs font-mono mb-2" style="color:var(--ink-soft);">${locText}</p>` : ''}
-            <span class="text-xs font-semibold px-2 py-1 rounded-lg inline-block" style="background:color-mix(in srgb, ${routeColor} 15%, transparent); color:${routeColor}; border:1px solid ${routeColor}33;">${routeLabel}</span>
-          </div>
-        </div>
-        <!-- Botones -->
-        <div class="flex gap-2 pt-2 border-t" style="border-color:var(--border);">
-          <button class="view-location-btn btn-lift flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg ${fresh ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}" 
-                  style="background:${fresh ? 'var(--primary-light)' : '#F3F4F6'}; color:${fresh ? 'var(--primary)' : 'var(--ink-soft)'};"
-                  data-driver-id="${d.id}" 
-                  data-driver-name="${d.name}" 
-                  data-is-fresh="${fresh}"
-                  ${fresh ? '' : 'disabled'}>
-            <i data-lucide="${fresh ? 'map-pin' : 'map-x'}" class="w-4 h-4"></i> 
-            ${fresh ? 'Ver ubicación' : 'Sin ubicación'}
-          </button>
-          <button class="center-map-btn btn-lift px-3 py-2 rounded-lg" style="background:var(--paper-2); border:1.5px solid var(--border); color:var(--ink);" aria-label="Centrar mapa en ${d.name}" ${fresh ? '' : 'disabled style="opacity:0.5;"'}>
-            <i data-lucide="map" class="w-4 h-4"></i>
-          </button>
+      <div class="min-w-0 flex items-center gap-2 sm:gap-2.5 flex-1">
+        <span class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 font-display font-bold text-sm" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
+        <div class="min-w-0">
+          <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
+          <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block" style="background:${routeColor}; color:#08131c;">${routeLabel}</span>
         </div>
       </div>
+      <span class="flex items-center gap-1.5 sm:gap-2.5 text-xs font-semibold shrink-0">
+        <span class="hidden sm:flex items-center gap-1.5"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}</span>
+        <span class="status-dot sm:hidden ${fresh ? 'on' : 'off'}"></span>
+        <button class="driver-map-btn btn-lift w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--talavera);" title="Ver en el mapa">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+        </button>
+      </span>
     `;
-    
-    row.classList.add('clickable');
-    list.appendChild(row);
 
-    // Botón "Ver ubicación"
-    const viewLocBtn = row.querySelector('.view-location-btn');
-    if (viewLocBtn && fresh && location) {
-      viewLocBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        focusDriverOnMap(d.id, d.name, fresh, location);
-      });
-    }
+    // Click en la fila: abre la ficha rápida (drawer)
+    row.addEventListener('click', () => openDriverDrawer(d.id));
 
-    // Botón "Centrar mapa"
-    const centerMapBtn = row.querySelector('.center-map-btn');
-    if (centerMapBtn && fresh && location) {
-      centerMapBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        focusDriverOnMap(d.id, d.name, fresh, location);
-      });
-    }
-
-    // Evento click en la tarjeta completa
-    row.addEventListener('click', () => {
-      if (fresh && location) {
-        focusDriverOnMap(d.id, d.name, fresh, location);
+    // Click en el botón de mapa: va directo al mapa (o avisa si no hay ubicación)
+    const mapBtn = row.querySelector('.driver-map-btn');
+    mapBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (fresh) {
+        goToDriverOnMap(d.id);
       } else {
-        showToast(`⚠️ ${d.name} está sin conexión`, 'error');
+        showToast(`${d.name}: sin ubicación disponible.`);
       }
     });
-    row.style.cursor = fresh ? 'pointer' : 'default';
+
+    list.appendChild(row);
 
     if (fresh && location && location.lat && location.lng) {
       const latlng = [location.lat, location.lng];
@@ -330,14 +462,6 @@ async function renderDriversAndMap() {
     }
   });
 
-  document.getElementById('driversOnlineCount').textContent = 
-    onlineCount + ' en ruta · ' + capillaCount + ' Capilla · ' + secundariaCount + ' Sec.';
-
-  const statOnlineNumber = document.getElementById('statOnlineNumber');
-  const statOnlineSub = document.getElementById('statOnlineSub');
-  if (statOnlineNumber) statOnlineNumber.textContent = `${onlineCount}/${drivers.length}`;
-  if (statOnlineSub) statOnlineSub.textContent = `${capillaCount} Capilla · ${secundariaCount} Secundaria`;
-
   const activeMarkers = Object.values(driverMarkers);
   if (activeMarkers.length > 0 && !map._rssCentered) {
     const group = L.featureGroup(activeMarkers);
@@ -346,6 +470,37 @@ async function renderDriversAndMap() {
   }
 
   if (window.lucide) lucide.createIcons();
+}
+
+// ----- FRANJA DE PULSO DE FLOTA -----
+function renderFleetPulse() {
+  const rail = document.getElementById('fleetPulse');
+  const countEl = document.getElementById('fleetPulseCount');
+  if (!rail) return;
+
+  const online = lastDrivers.filter(d => {
+    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+    return location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+  });
+
+  countEl.textContent = `${online.length}/${lastDrivers.length} activas`;
+
+  if (online.length === 0) {
+    rail.innerHTML = `<p class="text-xs px-1" style="color:var(--ink-faint);">Ninguna unidad en ruta por ahora.</p>`;
+    return;
+  }
+
+  rail.innerHTML = online.map(d => `
+    <button class="pulse-chip flex items-center gap-1.5 px-3 py-1.5" data-driver-id="${d.id}">
+      <span class="status-dot on pulse-live"></span>
+      <span class="text-xs font-semibold">${d.name}</span>
+      <span class="text-[10px] font-mono" style="color:var(--ink-faint);">U${d.unit?.unit_number ?? '?'}</span>
+    </button>
+  `).join('');
+
+  rail.querySelectorAll('.pulse-chip').forEach(chip => {
+    chip.addEventListener('click', () => openDriverDrawer(chip.dataset.driverId));
+  });
 }
 
 // ----- RENDERIZAR AVISOS DE RUTA -----
@@ -368,26 +523,25 @@ async function renderRouteEvents() {
 
   const list = document.getElementById('routeEventsList');
   if (!events || events.length === 0) {
-    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center py-6" style="color:var(--ink-soft);"><i data-lucide="inbox" class="w-5 h-5 mx-auto mb-2 opacity-40"></i>No hay avisos</p>`;
+    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>`;
+    document.getElementById('kpiAvisos').textContent = '0';
     return;
   }
 
-  list.innerHTML = events.map(ev => {
-    const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '--';
-    const routeTxt = ev.route === 'capilla' ? 'Capilla' : (ev.route === 'secundaria' ? 'Secundaria' : '');
-    return `
-      <div class="event-card">
-        <div class="event-card-header">
-          <div class="flex-1">
-            <div class="event-card-title">${ev.driver?.name || 'Conductor'}</div>
-            <div class="text-xs mt-1" style="color:var(--ink-soft);">📢 ${ev.label || 'Aviso'}</div>
-          </div>
-          <span class="event-card-time">${time}</span>
-        </div>
-        ${routeTxt ? `<span class="event-card-route">📍 ${routeTxt}</span>` : ''}
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const todayCount = events.filter(ev => ev.created_at && new Date(ev.created_at) >= startOfDay).length;
+  document.getElementById('kpiAvisos').textContent = String(todayCount);
+
+  list.innerHTML = events.map(ev => `
+    <div class="flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--surface)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm truncate">${ev.driver?.name || 'Conductor'} — ${ev.label || 'Aviso'}</p>
+        <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX') : '—'}${ev.route ? ' · ' + (ev.route === 'capilla' ? 'Por Capilla' : 'Por Secundaria') : ''}</p>
       </div>
-    `;
-  }).join('');
+    </div>
+  `).join('');
   if (window.lucide) lucide.createIcons();
 }
 
@@ -397,7 +551,6 @@ async function renderChecadorEvents() {
 
   const isAdmin = currentOwner.role === 'admin';
 
-  // Solo lo de hoy (hora local del dispositivo)
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -415,9 +568,12 @@ async function renderChecadorEvents() {
   const { data: events, error } = await query;
   if (error) { console.error('Error cargando checador_events:', error); return; }
 
+  lastChecadorEvents = events || [];
+
   const list = document.getElementById('checadorEventsList');
   if (!events || events.length === 0) {
-    list.innerHTML = `<p id="checadorEventsEmpty" class="text-sm text-center py-4" style="color:var(--ink-soft);"><i data-lucide="check-circle-2" class="w-5 h-5 mx-auto mb-2 opacity-40"></i>Sin registros</p>`;
+    list.innerHTML = `<p id="checadorEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay registros del checador hoy.</p>`;
+    document.getElementById('kpiPunctuality').textContent = '—';
     return;
   }
 
@@ -427,6 +583,13 @@ async function renderChecadorEvents() {
     no_se_presento: { label: 'No se presentó', icon: 'alert-triangle', color: 'var(--alerta)' },
   };
 
+  // Puntualidad del día: % de "a_tiempo" sobre el total de registros con estatus conocido
+  const known = events.filter(ev => statusInfo[ev.status]);
+  const onTime = known.filter(ev => ev.status === 'a_tiempo').length;
+  document.getElementById('kpiPunctuality').textContent = known.length
+    ? `${Math.round((onTime / known.length) * 100)}%`
+    : '—';
+
   list.innerHTML = events.map((ev) => {
     const info = statusInfo[ev.status] || { label: ev.status || '—', icon: 'circle', color: 'var(--ink-soft)' };
     const routeTxt = ev.route === 'capilla' ? 'Por Capilla' : (ev.route === 'secundaria' ? 'Por Secundaria' : '');
@@ -435,7 +598,7 @@ async function renderChecadorEvents() {
 
     return `
       <div class="flex items-center gap-2.5">
-        <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, ${info.color} 16%, var(--paper-2)); color:${info.color};"><i data-lucide="${info.icon}" class="w-4 h-4"></i></span>
+        <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, ${info.color} 18%, var(--surface)); color:${info.color};"><i data-lucide="${info.icon}" class="w-4 h-4"></i></span>
         <div class="min-w-0">
           <p class="font-display font-semibold text-sm truncate">${unitNum} — ${ev.driver?.name || 'Conductor'} — <span style="color:${info.color};">${info.label}</span></p>
           <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${time}${routeTxt ? ' · ' + routeTxt : ''}${ev.ubicacion ? ' · pasó por ' + ev.ubicacion : ''}${ev.checador?.name ? ' · Checador: ' + ev.checador.name : ''}</p>
@@ -467,36 +630,23 @@ async function renderAlerts() {
 
   const list = document.getElementById('alertsList');
   const empty = document.getElementById('alertsEmpty');
-  const statAlertsCard = document.getElementById('statAlertsCard');
-  const statAlertsNumber = document.getElementById('statAlertsNumber');
-  const statAlertsSub = document.getElementById('statAlertsSub');
 
   if (!alerts || alerts.length === 0) {
     empty.classList.remove('hidden');
     list.innerHTML = '';
     document.getElementById('alarmBar').classList.remove('show');
-    if (statAlertsCard) {
-      statAlertsCard.classList.remove('alert-live');
-      statAlertsNumber.textContent = '0';
-      statAlertsNumber.style.color = 'var(--agave-dark)';
-      statAlertsSub.textContent = 'Todo tranquilo';
-    }
+    document.getElementById('kpiAlerts').textContent = '0';
     return;
   }
   empty.classList.add('hidden');
 
   const pendingCount = alerts.filter(a => a.status === 'pendiente').length;
-  const anyPending = pendingCount > 0;
-  if (anyPending) {
+  document.getElementById('kpiAlerts').textContent = String(pendingCount);
+
+  if (pendingCount > 0) {
     document.getElementById('alarmBar').classList.add('show');
   } else {
     document.getElementById('alarmBar').classList.remove('show');
-  }
-  if (statAlertsCard) {
-    statAlertsCard.classList.toggle('alert-live', anyPending);
-    statAlertsNumber.textContent = String(pendingCount);
-    statAlertsNumber.style.color = anyPending ? 'var(--alerta)' : 'var(--agave-dark)';
-    statAlertsSub.textContent = anyPending ? 'Necesitan atención' : 'Todo tranquilo';
   }
 
   list.innerHTML = alerts.map(a => {
@@ -514,8 +664,8 @@ async function renderAlerts() {
           </div>
         </div>
         <div class="flex gap-2 mt-3.5">
-          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn-lift text-xs font-semibold px-3.5 py-2 rounded-full flex items-center gap-1.5" style="background:var(--talavera); color:#fff;"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver ubicación</a>` : `<span class="text-xs" style="color:var(--ink-soft);">Sin ubicación</span>`}
-          ${isPending ? `<button class="resolve-btn btn-lift text-xs font-semibold px-3.5 py-2 rounded-full" style="background:var(--agave); color:#fff;" data-id="${a.id}">Marcar atendida</button>` : ''}
+          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn-lift text-xs font-semibold px-3.5 py-2 rounded-full flex items-center gap-1.5" style="background:var(--talavera); color:#08131c;"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver ubicación</a>` : `<span class="text-xs" style="color:var(--ink-soft);">Sin ubicación</span>`}
+          ${isPending ? `<button class="resolve-btn btn-lift text-xs font-semibold px-3.5 py-2 rounded-full" style="background:var(--agave); color:#08131c;" data-id="${a.id}">Marcar atendida</button>` : ''}
         </div>
       </div>
     `;
@@ -533,7 +683,6 @@ async function renderAlerts() {
         console.error('Error al marcar alerta como atendida:', error);
         btn.disabled = false;
       } else {
-        // No esperamos al canal de Realtime: refrescamos de una vez
         renderAlerts();
       }
     });
@@ -546,19 +695,20 @@ document.getElementById('silenceBtn').addEventListener('click', () => {
   document.getElementById('alarmBar').classList.remove('show');
 });
 
-// ----- PESTAÑAS DE ACTIVIDAD (Avisos de ruta / Registros del checador) -----
-const tabAvisosBtn = document.getElementById('tabAvisosBtn');
-const tabChecadorBtn = document.getElementById('tabChecadorBtn');
-const tabAvisosPanel = document.getElementById('tabAvisosPanel');
-const tabChecadorPanel = document.getElementById('tabChecadorPanel');
+// ----- NAVEGACIÓN LATERAL: marcar el enlace activo según la sección visible -----
+const navLinks = Array.from(document.querySelectorAll('aside .nav-item'));
+if (navLinks.length) {
+  const sectionIds = navLinks.map(a => a.getAttribute('href').slice(1));
+  const sections = sectionIds.map(id => document.getElementById(id)).filter(Boolean);
 
-function switchActivityTab(tab) {
-  const showAvisos = tab === 'avisos';
-  tabAvisosBtn.classList.toggle('active', showAvisos);
-  tabChecadorBtn.classList.toggle('active', !showAvisos);
-  tabAvisosPanel.classList.toggle('active', showAvisos);
-  tabChecadorPanel.classList.toggle('active', !showAvisos);
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+
+  sections.forEach(sec => observer.observe(sec));
 }
-
-tabAvisosBtn.addEventListener('click', () => switchActivityTab('avisos'));
-tabChecadorBtn.addEventListener('click', () => switchActivityTab('checador'));

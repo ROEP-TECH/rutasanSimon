@@ -1,4 +1,5 @@
 import { supabase } from './supabase-config.js';
+import { initPushNotifications } from './push-notifications.js';
 
 // ----- HELPER: enganchar eventos sin tronar si el elemento no existe -----
 function on(el, event, handler, label) {
@@ -88,6 +89,11 @@ function unlock(checador) {
   checadorNameText.textContent = checador.name;
   loadUnits();
   initRealtime();
+
+  // Notificaciones push forzosas: que le lleguen las alertas aunque tenga
+  // el panel cerrado o el celular bloqueado (requiere que el panel esté
+  // instalado desde Chrome). Ver push-notifications.js para la config.
+  initPushNotifications('checador', checador.id, checador.name);
 
   // Panel ampliado: conductores + alertas (mismo que ve el dueño).
   // El mapa incrustado solo se usa en celular; en escritorio "Mapa" abre

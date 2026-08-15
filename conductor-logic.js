@@ -25,10 +25,13 @@ const panicBtn = document.getElementById('panicBtn');
 const panicOverlay = document.getElementById('panicOverlay');
 const headerDriverName = document.getElementById('headerDriverName');
 const headerShiftDot = document.getElementById('headerShiftDot');
+const nameDisplayRow = document.getElementById('nameDisplayRow');
+const nameEditRow = document.getElementById('nameEditRow');
+const editNameBtn = document.getElementById('editNameBtn');
+const checkpointBtnLabel = document.getElementById('checkpointBtnLabel');
 const turnoBtn = document.getElementById('turnoBtn');
-const turnoStatusText = document.getElementById('turnoStatusText');
+const turnoReposoStatus = document.getElementById('turnoReposoStatus');
 const reposoBtn = document.getElementById('reposoBtn');
-const reposoStatusText = document.getElementById('reposoStatusText');
 
 let currentDriver = null;
 let watchId = null;
@@ -140,12 +143,36 @@ function setupDriverNameField() {
   updateHeaderDriverName();
 }
 
+// El nombre ya no tiene tarjeta aparte: se edita directo en la barra de
+// arriba. Tocar el lápiz muestra el input; blur/Enter lo guarda y regresa
+// a mostrar el nombre normal.
+function openNameEdit() {
+  nameDisplayRow.classList.add('hidden');
+  nameEditRow.classList.remove('hidden');
+  nameEditRow.classList.add('flex');
+  driverNameInput.focus();
+  driverNameInput.select();
+}
+
+function closeNameEdit() {
+  nameEditRow.classList.add('hidden');
+  nameEditRow.classList.remove('flex');
+  nameDisplayRow.classList.remove('hidden');
+}
+
+editNameBtn.addEventListener('click', openNameEdit);
+
 // Refleja lo que va escribiendo en el header, aunque todavía no le dé blur/Enter
 driverNameInput.addEventListener('input', updateHeaderDriverName);
 
 async function saveDriverName() {
   const newName = driverNameInput.value.trim();
-  if (!newName || newName === currentDriver.name) return;
+  closeNameEdit();
+
+  if (!newName || newName === currentDriver.name) {
+    updateHeaderDriverName();
+    return;
+  }
 
   const { error } = await supabase
     .from('drivers')
@@ -157,7 +184,7 @@ async function saveDriverName() {
     updateHeaderDriverName();
     if (nameSavedText) {
       nameSavedText.classList.remove('hidden');
-      setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
+      setTimeout(() => nameSavedText.classList.add('hidden'), 2500);
     }
   } else {
     console.error('Error guardando nombre:', error);
@@ -213,7 +240,7 @@ const CHECKPOINTS = [
 
 let checkpointIdx = 0;
 function updateCheckpointButtonLabel() {
-  checkpointBtn.textContent = CHECKPOINTS[checkpointIdx].label;
+  checkpointBtnLabel.textContent = CHECKPOINTS[checkpointIdx].label;
 }
 
 function setupCheckpointButton() {
@@ -250,6 +277,25 @@ checkpointBtn.addEventListener('click', async () => {
   updateCheckpointButtonLabel();
 });
 
+// ----- ESTATUS COMPARTIDO (debajo de Turno/Reposo) -----
+// Un solo renglón chiquito: si está en reposo (tiene cuenta regresiva) eso
+// manda, porque es lo más urgente/temporal; si no, muestra el estatus del
+// turno; si no hay nada que avisar, se oculta para no estorbar la vista.
+function renderTurnoReposoStatus() {
+  if (!turnoReposoStatus) return;
+
+  if (reposoUntil && reposoUntil.getTime() - Date.now() > 0) {
+    const remaining = reposoUntil.getTime() - Date.now();
+    turnoReposoStatus.textContent = 'En reposo · vuelve en ' + formatMMSS(remaining) + ' · toca "Reposo" para cancelar';
+    turnoReposoStatus.classList.remove('hidden');
+  } else if (onShift) {
+    turnoReposoStatus.textContent = 'Turno en curso.';
+    turnoReposoStatus.classList.remove('hidden');
+  } else {
+    turnoReposoStatus.classList.add('hidden');
+  }
+}
+
 // ----- TURNO (INICIAR / TERMINAR) -----
 // Es independiente del botón de ubicación: solo lleva registro de cuándo
 // el chofer empieza y termina su jornada. NO prende ni apaga el GPS.
@@ -260,15 +306,14 @@ let onShift = false;
 function renderTurnoBtn() {
   if (onShift) {
     turnoBtn.classList.add('on');
-    turnoBtn.textContent = 'Terminar mi turno';
-    turnoStatusText.textContent = 'Turno en curso. Presiona cuando termines tu jornada.';
+    turnoBtn.innerHTML = 'Terminar<br>mi turno';
     if (headerShiftDot) headerShiftDot.classList.remove('hidden');
   } else {
     turnoBtn.classList.remove('on');
-    turnoBtn.textContent = 'Iniciar mi turno';
-    turnoStatusText.textContent = 'Marca cuando empiezas y cuando terminas tu jornada.';
+    turnoBtn.innerHTML = 'Iniciar<br>mi turno';
     if (headerShiftDot) headerShiftDot.classList.add('hidden');
   }
+  renderTurnoReposoStatus();
 }
 
 function setupTurnoState() {
@@ -320,13 +365,12 @@ function renderReposoBtn() {
 
   if (reposoUntil && remaining > 0) {
     reposoBtn.classList.add('active');
-    reposoBtn.textContent = 'En reposo · ' + formatMMSS(remaining) + ' (toca para cancelar)';
-    reposoStatusText.textContent = 'El dueño y el checador ven que estás en reposo. Se quita solo.';
+    reposoBtn.innerHTML = formatMMSS(remaining) + '<br>cancelar';
   } else {
     reposoBtn.classList.remove('active');
-    reposoBtn.textContent = 'Marcar ' + REPOSO_MINUTES + ' min de reposo';
-    reposoStatusText.textContent = 'Le avisa al dueño y al checador que estás parado descansando. Se quita solo. Los pasajeros no lo ven.';
+    reposoBtn.innerHTML = 'Marcar<br>reposo';
   }
+  renderTurnoReposoStatus();
 }
 
 function stopReposoCountdown() {

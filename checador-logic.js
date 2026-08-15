@@ -54,6 +54,20 @@ let pendingIncidentDriver = null; // objeto {driverId, unitId, driverName, route
 let allowUbicacionCancel = false;
 let unitsById = {}; // { unitId: { unit_number, drivers: [...] } }
 
+// ----- PANEL AMPLIADO (mapa + conductores + alertas, como el del dueño) -----
+let map = null;
+let mapInitialized = false;
+let driverMarkers = {};
+let locationChannel = null;
+let routeChannel = null;
+let alertChannel = null;
+let driversStatusChannel = null;
+let vueltasChannel = null;
+
+let lastDrivers = [];
+let lastRouteEvents = [];
+let lastVueltas = {}; // driver_id -> vueltas de hoy
+
 // ----- LOGIN CON PIN -----
 on(pinSubmitBtn, 'click', tryPin);
 on(pinInput, 'keydown', (e) => { if (e.key === 'Enter') tryPin(); });
@@ -82,25 +96,46 @@ function unlock(checador) {
   currentChecador = checador;
   pinScreen.classList.add('hidden');
   mainScreen.classList.remove('hidden');
+  mainScreen.classList.add('md:flex');
   checadorNameText.textContent = checador.name;
   setupUbicacion();
   loadUnits();
   initRealtime();
+
+  // Panel ampliado: mapa + conductores + alertas (mismo que ve el dueño)
+  if (!mapInitialized) initMap();
+  initFleetRealtimeListeners();
+
   if (window.lucide) lucide.createIcons();
 }
 
 // ----- CIERRE DE SESIÓN -----
 function goToPinScreen() {
   if (driversChannel) supabase.removeChannel(driversChannel);
+  if (locationChannel) supabase.removeChannel(locationChannel);
+  if (routeChannel) supabase.removeChannel(routeChannel);
+  if (alertChannel) supabase.removeChannel(alertChannel);
+  if (driversStatusChannel) supabase.removeChannel(driversStatusChannel);
+  if (vueltasChannel) supabase.removeChannel(vueltasChannel);
   localStorage.removeItem('rss_checador_id');
   currentChecador = null;
+  lastDrivers = [];
+  lastRouteEvents = [];
+  lastVueltas = {};
+  mapInitialized = false;
+  driverMarkers = {};
+  closeDriverDrawer();
+  closeMobileNav();
   mainScreen.classList.add('hidden');
+  mainScreen.classList.remove('md:flex');
   pinScreen.classList.remove('hidden');
   pinInput.value = '';
 }
 
 on(backToPinBtn, 'click', goToPinScreen);
 on(switchChecadorBtn, 'click', goToPinScreen, 'switchChecadorBtn - opcional, normal que no exista');
+on(document.getElementById('logoutBtnDesktop'), 'click', goToPinScreen, 'logoutBtnDesktop');
+on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logoutBtnMobileNav');
 
 // ----- UBICACIÓN (texto libre, con memoria en este dispositivo) -----
 function setupUbicacion() {
@@ -355,6 +390,549 @@ on(incidentNoPresentoBtn, 'click', () => {
   if (driverData) registerCheckpoint(driverData, 'no_se_presento');
 });
 
+// ============================================================
+// PANEL AMPLIADO — mapa, conductores (turno/reposo/vueltas) y
+// alertas, con el mismo alcance que ve el dueño (todas las
+// unidades/dueños). Pensado para usarse también desde una PC de
+// escritorio con el mapa en grande.
+// ============================================================
+
+// ----- MAPA (Leaflet) -----
+function initMap() {
+  if (mapInitialized) return;
+  map = L.map('map', { zoomControl: true, attributionControl: false }).setView([19.272, -98.455], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  L.control.attribution({ prefix: false })
+    .addAttribution('© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+    .addTo(map);
+  mapInitialized = true;
+}
+
+function driverIcon(route) {
+  const color = route === 'secundaria' ? '#2FD98A' : (route === 'capilla' ? '#FFAE33' : '#3FB0F0');
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
+function goToDriverOnMap(driverId) {
+  const marker = driverMarkers[driverId];
+  if (!map || !marker) return;
+  map._rssCentered = true;
+  map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.75 });
+  marker.openPopup();
+  const mapEl = document.getElementById('map');
+  if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ----- TURNO / REPOSO (lo reporta el propio conductor desde su panel) -----
+function turnoReposoInfo(d) {
+  const restingUntil = d.resting_until ? new Date(d.resting_until) : null;
+  const resting = !!(restingUntil && restingUntil.getTime() > Date.now());
+  return { onShift: !!d.on_shift, resting, restingUntil };
+}
+
+function turnoReposoBadgeHtml(d) {
+  const { onShift, resting, restingUntil } = turnoReposoInfo(d);
+  if (resting) {
+    const mins = Math.max(0, Math.ceil((restingUntil.getTime() - Date.now()) / 60000));
+    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--cempasuchil) 20%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="coffee" class="w-3 h-3"></i> Reposo · ${mins} min</span>`;
+  }
+  if (onShift) {
+    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--agave) 20%, var(--surface)); color:var(--agave);"><i data-lucide="play-circle" class="w-3 h-3"></i> En turno</span>`;
+  }
+  return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:var(--surface-2); color:var(--ink-faint);"><i data-lucide="pause-circle" class="w-3 h-3"></i> Fuera de turno</span>`;
+}
+
+// ----- VUELTAS DEL DÍA (las asigna el checador aquí mismo) -----
+async function loadVueltasToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('driver_vueltas')
+    .select('driver_id, vueltas')
+    .eq('date', today);
+
+  if (error) { console.error('Error cargando vueltas del día:', error); return; }
+
+  lastVueltas = {};
+  (data || []).forEach((v) => { lastVueltas[v.driver_id] = v.vueltas; });
+}
+
+async function setVueltas(driverId, newValue) {
+  const value = Math.max(0, newValue);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { error } = await supabase
+    .from('driver_vueltas')
+    .upsert({
+      driver_id: driverId,
+      date: today,
+      vueltas: value,
+      updated_by: currentChecador ? currentChecador.id : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'driver_id,date' });
+
+  if (error) {
+    console.error('Error guardando vueltas:', error);
+    showToast('No se pudo guardar la vuelta. Intenta de nuevo.', 'error');
+    return;
+  }
+
+  lastVueltas[driverId] = value;
+  renderDriversList();
+}
+
+function vueltasStepperHtml(driverId) {
+  const n = lastVueltas[driverId] ?? 0;
+  return `
+    <span class="vueltas-stepper" data-driver-id="${driverId}">
+      <button type="button" class="vueltas-minus" aria-label="Quitar una vuelta"><i data-lucide="minus" class="w-3 h-3"></i></button>
+      <span class="vueltas-count">${n}</span>
+      <button type="button" class="vueltas-plus" aria-label="Agregar una vuelta"><i data-lucide="plus" class="w-3 h-3"></i></button>
+    </span>
+  `;
+}
+
+// ----- REALTIME DEL PANEL AMPLIADO -----
+function initFleetRealtimeListeners() {
+  locationChannel = supabase
+    .channel('checador-locations-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderDriversAndMap())
+    .subscribe((status, err) => console.log('[Realtime] live_locations:', status, err || ''));
+
+  routeChannel = supabase
+    .channel('checador-route-events-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'route_events' }, () => renderRouteEvents())
+    .subscribe((status, err) => console.log('[Realtime] route_events:', status, err || ''));
+
+  alertChannel = supabase
+    .channel('checador-alerts-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'panic_alerts' }, () => renderAlerts())
+    .subscribe((status, err) => console.log('[Realtime] panic_alerts:', status, err || ''));
+
+  driversStatusChannel = supabase
+    .channel('checador-drivers-status-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderDriversAndMap())
+    .subscribe((status, err) => console.log('[Realtime] drivers (turno/reposo):', status, err || ''));
+
+  vueltasChannel = supabase
+    .channel('checador-driver-vueltas-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_vueltas' }, () => {
+      loadVueltasToday().then(renderDriversList);
+    })
+    .subscribe((status, err) => console.log('[Realtime] driver_vueltas:', status, err || ''));
+
+  renderDriversAndMap();
+  renderRouteEvents();
+  renderAlerts();
+}
+
+setInterval(() => { if (currentChecador) renderDriversList(); }, 30000);
+
+// ----- CONDUCTORES Y MAPA (todas las unidades, de todos los dueños) -----
+async function renderDriversAndMap() {
+  if (!currentChecador) return;
+
+  const { data: drivers, error } = await supabase
+    .from('drivers')
+    .select(`
+      *,
+      unit:unit_id ( unit_number ),
+      live_location:live_locations ( lat, lng, heading, speed, updated_at )
+    `);
+
+  if (error) { console.error('Error al cargar conductores:', error); return; }
+
+  lastDrivers = drivers || [];
+  await loadVueltasToday();
+  renderDriversList();
+}
+
+function renderDriversList() {
+  const list = document.getElementById('driversList');
+  const emptyMsg = document.getElementById('driversEmpty');
+  if (!list) return;
+  list.innerHTML = '';
+
+  let onlineCount = 0;
+  let restingCount = 0;
+  let vueltasTotal = 0;
+
+  lastDrivers.forEach((d) => {
+    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+    const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+    if (fresh) onlineCount++;
+    if (turnoReposoInfo(d).resting) restingCount++;
+    vueltasTotal += (lastVueltas[d.id] ?? 0);
+  });
+
+  const driversOnlineCount = document.getElementById('driversOnlineCount');
+  if (driversOnlineCount) driversOnlineCount.textContent = `${onlineCount} en ruta de ${lastDrivers.length}`;
+
+  const kpiOnRoute = document.getElementById('kpiOnRoute');
+  if (kpiOnRoute) kpiOnRoute.textContent = `${onlineCount}/${lastDrivers.length}`;
+  const kpiReposo = document.getElementById('kpiReposo');
+  if (kpiReposo) kpiReposo.textContent = String(restingCount);
+  const kpiVueltas = document.getElementById('kpiVueltas');
+  if (kpiVueltas) kpiVueltas.textContent = String(vueltasTotal);
+
+  if (lastDrivers.length === 0) {
+    if (emptyMsg) emptyMsg.classList.remove('hidden');
+  } else if (emptyMsg) {
+    emptyMsg.classList.add('hidden');
+  }
+
+  lastDrivers.forEach((d) => {
+    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+    const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+    const rLabel = routeLabel(d.route);
+    const rColor = routeColor(d.route);
+
+    let locText = 'Sin conexión';
+    if (fresh) {
+      locText = `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+    } else if (location && location.updated_at) {
+      locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'fleet-row py-3 flex items-center justify-between gap-1.5 sm:gap-2';
+    row.dataset.driverId = d.id;
+
+    row.innerHTML = `
+      <div class="min-w-0 flex items-center gap-2 sm:gap-2.5 flex-1 cursor-pointer">
+        <span class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 font-display font-bold text-sm" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
+        <div class="min-w-0">
+          <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
+          <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
+          <div class="flex flex-wrap items-center gap-1 mt-1">
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block" style="background:${rColor}; color:#08131c;">${rLabel}</span>
+            ${turnoReposoBadgeHtml(d)}
+          </div>
+        </div>
+      </div>
+      <span class="flex flex-col items-end gap-1.5 shrink-0">
+        <span class="flex items-center gap-1.5 text-xs font-semibold"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> <button class="driver-map-btn btn-lift w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--talavera);" title="Ver en el mapa"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i></button></span>
+        ${vueltasStepperHtml(d.id)}
+      </span>
+    `;
+
+    row.querySelector('.min-w-0.flex').addEventListener('click', () => openDriverDrawer(d.id));
+
+    const mapBtn = row.querySelector('.driver-map-btn');
+    mapBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (fresh) goToDriverOnMap(d.id);
+      else showToast(`${d.name}: sin ubicación disponible.`, 'warn');
+    });
+
+    const minusBtn = row.querySelector('.vueltas-minus');
+    const plusBtn = row.querySelector('.vueltas-plus');
+    minusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (navigator.vibrate) navigator.vibrate(15);
+      setVueltas(d.id, (lastVueltas[d.id] ?? 0) - 1);
+    });
+    plusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (navigator.vibrate) navigator.vibrate(15);
+      setVueltas(d.id, (lastVueltas[d.id] ?? 0) + 1);
+    });
+
+    list.appendChild(row);
+
+    if (fresh && location && location.lat && location.lng && map) {
+      const latlng = [location.lat, location.lng];
+      if (!driverMarkers[d.id]) {
+        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route) }).addTo(map).bindPopup(`${d.name} · ${rLabel}`);
+      } else {
+        driverMarkers[d.id].setLatLng(latlng);
+        driverMarkers[d.id].setPopupContent(`${d.name} · ${rLabel}`);
+      }
+    } else if (driverMarkers[d.id] && map) {
+      map.removeLayer(driverMarkers[d.id]);
+      delete driverMarkers[d.id];
+    }
+  });
+
+  if (map) {
+    const activeMarkers = Object.values(driverMarkers);
+    if (activeMarkers.length > 0 && !map._rssCentered) {
+      const group = L.featureGroup(activeMarkers);
+      map.fitBounds(group.getBounds().pad(0.2));
+      map._rssCentered = true;
+    }
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// ----- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -----
+const driverDrawer = document.getElementById('driverDrawer');
+const driverDrawerOverlay = document.getElementById('driverDrawerOverlay');
+const driverDrawerContent = document.getElementById('driverDrawerContent');
+
+function openDriverDrawer(driverId) {
+  const d = lastDrivers.find((x) => x.id === driverId);
+  if (!d || !driverDrawerContent) return;
+
+  const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+  const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
+  const ownEvents = lastRouteEvents.filter((ev) => ev.driver_id === d.id);
+
+  const ownEventsHtml = ownEvents.length
+    ? ownEvents.map((ev) => {
+        const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
+        const routeTxt = ev.route === 'capilla' ? 'Por Capilla' : (ev.route === 'secundaria' ? 'Por Secundaria' : '');
+        return `
+          <div class="flex items-center gap-2.5 py-1.5">
+            <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="flag" class="w-3.5 h-3.5"></i></span>
+            <p class="text-xs" style="color:var(--ink-soft);"><span class="font-semibold" style="color:var(--talavera);">${ev.label || 'Aviso'}</span> · ${time}${routeTxt ? ' · ' + routeTxt : ''}</p>
+          </div>`;
+      }).join('')
+    : `<p class="text-xs" style="color:var(--ink-faint);">Este conductor todavía no ha reportado ninguna parada.</p>`;
+
+  let locText = 'Sin conexión';
+  if (fresh) {
+    locText = `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+  } else if (location && location.updated_at) {
+    locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
+  }
+
+  driverDrawerContent.innerHTML = `
+    <div class="flex items-center gap-3">
+      <span class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-display font-bold text-lg" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-base truncate">${d.name}</p>
+        <p class="text-xs font-mono" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full" style="background:${routeColor(d.route)}; color:#08131c;">${routeLabel(d.route)}</span>
+      <span class="flex items-center gap-1.5 text-xs font-semibold" style="color:var(--ink-soft);"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}</span>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-1.5">
+      ${turnoReposoBadgeHtml(d)}
+    </div>
+
+    <div class="card-soft p-3">
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1" style="color:var(--ink-faint);">Última ubicación</p>
+      <p class="text-xs font-mono" style="color:var(--ink-soft);">${locText}</p>
+    </div>
+
+    <div>
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Vueltas de hoy</p>
+      <div class="card-soft p-3 flex items-center justify-between">
+        ${vueltasStepperHtml(d.id)}
+      </div>
+    </div>
+
+    <div>
+      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Registros propios del conductor</p>
+      <div class="card-soft p-3">${ownEventsHtml}</div>
+    </div>
+
+    <div class="flex gap-2 pt-1">
+      <button id="drawerGoToMap" class="btn-lift flex-1 text-xs font-semibold px-3.5 py-2.5 rounded-full flex items-center justify-center gap-1.5" style="background:var(--talavera); color:#08131c;" ${fresh ? '' : 'disabled'}>
+        <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver en el mapa
+      </button>
+    </div>
+    ${!fresh ? `<p class="text-[11px] text-center" style="color:var(--ink-faint);">Este conductor no tiene ubicación en vivo disponible.</p>` : ''}
+  `;
+
+  const stepper = driverDrawerContent.querySelector('.vueltas-stepper');
+  if (stepper) {
+    stepper.querySelector('.vueltas-minus').addEventListener('click', () => setVueltas(d.id, (lastVueltas[d.id] ?? 0) - 1).then(() => openDriverDrawer(d.id)));
+    stepper.querySelector('.vueltas-plus').addEventListener('click', () => setVueltas(d.id, (lastVueltas[d.id] ?? 0) + 1).then(() => openDriverDrawer(d.id)));
+  }
+
+  const goBtn = document.getElementById('drawerGoToMap');
+  if (goBtn && fresh) {
+    goBtn.addEventListener('click', () => { closeDriverDrawer(); goToDriverOnMap(d.id); });
+  } else if (goBtn) {
+    goBtn.style.opacity = '.5';
+    goBtn.style.cursor = 'not-allowed';
+  }
+
+  driverDrawer.classList.remove('hidden');
+  driverDrawerOverlay.classList.remove('hidden');
+  void driverDrawer.offsetHeight;
+  driverDrawer.classList.add('open');
+  if (window.lucide) lucide.createIcons();
+}
+
+let drawerCloseTimeout = null;
+function closeDriverDrawer() {
+  if (!driverDrawer) return;
+  driverDrawer.classList.remove('open');
+  driverDrawerOverlay.classList.add('hidden');
+  clearTimeout(drawerCloseTimeout);
+  drawerCloseTimeout = setTimeout(() => driverDrawer.classList.add('hidden'), 300);
+}
+on(document.getElementById('driverDrawerClose'), 'click', closeDriverDrawer);
+on(driverDrawerOverlay, 'click', closeDriverDrawer);
+
+// ----- AVISOS DE RUTA (lo que reporta el propio conductor: salió/llegó) -----
+async function renderRouteEvents() {
+  if (!currentChecador) return;
+
+  const { data: events, error } = await supabase
+    .from('route_events')
+    .select('*, driver:driver_id ( name )')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) { console.error('Error cargando route_events:', error); return; }
+
+  lastRouteEvents = events || [];
+  const list = document.getElementById('routeEventsList');
+  if (!list) return;
+
+  if (!events || events.length === 0) {
+    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>`;
+    return;
+  }
+
+  list.innerHTML = events.map((ev) => `
+    <div class="flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--surface)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm truncate">${ev.driver?.name || 'Conductor'} — ${ev.label || 'Aviso'}</p>
+        <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX') : '—'}${ev.route ? ' · ' + (ev.route === 'capilla' ? 'Por Capilla' : 'Por Secundaria') : ''}</p>
+      </div>
+    </div>
+  `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+// ----- ALERTAS DE AYUDA -----
+async function renderAlerts() {
+  if (!currentChecador) return;
+
+  const { data: alerts, error } = await supabase
+    .from('panic_alerts')
+    .select('*, driver:driver_id ( name )')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) { console.error('Error cargando panic_alerts:', error); return; }
+
+  const list = document.getElementById('alertsList');
+  const empty = document.getElementById('alertsEmpty');
+  if (!list || !empty) return;
+
+  if (!alerts || alerts.length === 0) {
+    empty.classList.remove('hidden');
+    list.innerHTML = '';
+    const alarmBar = document.getElementById('alarmBar');
+    if (alarmBar) alarmBar.classList.remove('show');
+    const kpiAlerts = document.getElementById('kpiAlerts');
+    if (kpiAlerts) kpiAlerts.textContent = '0';
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const pendingCount = alerts.filter((a) => a.status === 'pendiente').length;
+  const kpiAlerts = document.getElementById('kpiAlerts');
+  if (kpiAlerts) kpiAlerts.textContent = String(pendingCount);
+
+  const alarmBar = document.getElementById('alarmBar');
+  if (alarmBar) alarmBar.classList.toggle('show', pendingCount > 0);
+
+  list.innerHTML = alerts.map((a) => {
+    const isPending = a.status === 'pendiente';
+    const mapsUrl = (a.lat != null && a.lng != null) ? `https://www.google.com/maps?q=${a.lat},${a.lng}` : null;
+    return `
+      <div class="alert-card p-4 ${isPending ? '' : 'resolved'}">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="font-display font-semibold text-sm flex items-center gap-1.5" style="color:${isPending ? 'var(--alerta)' : 'var(--ink-soft)'};">
+              <i data-lucide="${isPending ? 'siren' : 'check-circle-2'}" class="w-4 h-4"></i> ${isPending ? 'Alerta activa' : 'Atendida'} · ${a.driver?.name || 'Conductor'}
+            </p>
+            <p class="text-xs font-mono mt-0.5" style="color:var(--ink-soft);">${a.created_at ? new Date(a.created_at).toLocaleString('es-MX') : '—'}</p>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3.5">
+          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn-lift text-xs font-semibold px-3.5 py-2 rounded-full flex items-center gap-1.5" style="background:var(--talavera); color:#08131c;"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver ubicación</a>` : `<span class="text-xs" style="color:var(--ink-soft);">Sin ubicación</span>`}
+          ${isPending ? `<button class="resolve-btn btn-lift text-xs font-semibold px-3.5 py-2 rounded-full" style="background:var(--agave); color:#08131c;" data-id="${a.id}">Marcar atendida</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.resolve-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const { error } = await supabase.from('panic_alerts').update({ status: 'atendida' }).eq('id', btn.dataset.id);
+      if (error) {
+        console.error('Error al marcar alerta como atendida:', error);
+        btn.disabled = false;
+      } else {
+        renderAlerts();
+      }
+    });
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+on(document.getElementById('silenceBtn'), 'click', () => {
+  const alarmBar = document.getElementById('alarmBar');
+  if (alarmBar) alarmBar.classList.remove('show');
+});
+
+// ----- MENÚ MÓVIL (hamburguesa) -----
+const mobileNavOpenBtn = document.getElementById('mobileNavOpen');
+const mobileNavCloseBtn = document.getElementById('mobileNavClose');
+const mobileNavOverlay = document.getElementById('mobileNavOverlay');
+const mobileNavPanel = document.getElementById('mobileNavPanel');
+
+function openMobileNav() {
+  if (!mobileNavOverlay || !mobileNavPanel) return;
+  mobileNavOverlay.classList.remove('hidden');
+  mobileNavPanel.classList.remove('hidden');
+  void mobileNavPanel.offsetHeight;
+  mobileNavPanel.classList.add('open');
+}
+
+let mobileNavCloseTimeout = null;
+function closeMobileNav() {
+  if (!mobileNavOverlay || !mobileNavPanel) return;
+  mobileNavPanel.classList.remove('open');
+  mobileNavOverlay.classList.add('hidden');
+  clearTimeout(mobileNavCloseTimeout);
+  mobileNavCloseTimeout = setTimeout(() => mobileNavPanel.classList.add('hidden'), 300);
+}
+
+on(mobileNavOpenBtn, 'click', openMobileNav);
+on(mobileNavCloseBtn, 'click', closeMobileNav);
+on(mobileNavOverlay, 'click', closeMobileNav);
+document.querySelectorAll('#mobileNavPanel a.mobile-nav-item').forEach((a) => {
+  a.addEventListener('click', closeMobileNav);
+});
+
+// ----- NAVEGACIÓN: marcar el enlace activo según la sección visible -----
+const navLinks = Array.from(document.querySelectorAll('aside .nav-item, #mobileNavPanel .mobile-nav-item'));
+if (navLinks.length) {
+  const sectionIds = [...new Set(navLinks.map((a) => a.getAttribute('href').slice(1)))];
+  const sections = sectionIds.map((id) => document.getElementById(id)).filter(Boolean);
+
+  const navObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+
+  sections.forEach((sec) => navObserver.observe(sec));
+}
+
 // ----- RESUMEN DEL DÍA -> PDF DESCARGABLE -----
 const STATUS_LABEL = {
   a_tiempo: 'A tiempo',
@@ -484,6 +1062,47 @@ async function downloadDaySummaryPdf() {
   doc.setFontSize(10);
   doc.setTextColor(90, 82, 68);
   doc.text(`Total: ${events.length} registros`, 14, finalY + 8);
+
+  // ----- TABLA DE VUELTAS POR CONDUCTOR (asignadas por el checador, hoy) -----
+  const { data: vueltasRows, error: vueltasError } = await supabase
+    .from('driver_vueltas')
+    .select('vueltas, driver:driver_id ( name, unit:unit_id ( unit_number ) )')
+    .eq('date', todayFile)
+    .order('vueltas', { ascending: false });
+
+  if (vueltasError) {
+    console.error('Error cargando vueltas para el PDF:', vueltasError);
+  } else if (vueltasRows && vueltasRows.length > 0) {
+    const vueltasBody = vueltasRows.map((v) => [
+      v.driver?.unit?.unit_number != null ? `Unidad ${v.driver.unit.unit_number}` : 'Unidad —',
+      v.driver?.name || 'Conductor',
+      String(v.vueltas ?? 0),
+    ]);
+    const vueltasTotal = vueltasRows.reduce((sum, v) => sum + (v.vueltas || 0), 0);
+
+    let vy = (doc.lastAutoTable.finalY || finalY) + 16;
+    if (vy > 260) { doc.addPage(); vy = 18; }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(14, 128, 190);
+    doc.text('Vueltas por conductor · hoy', 14, vy);
+
+    doc.autoTable({
+      head: [['Unidad', 'Conductor', 'Vueltas']],
+      body: vueltasBody,
+      startY: vy + 4,
+      styles: { font: 'helvetica', fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: [30, 158, 90], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [244, 238, 220] },
+      columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
+    });
+
+    const vFinalY = doc.lastAutoTable.finalY || (vy + 4);
+    doc.setFontSize(10);
+    doc.setTextColor(90, 82, 68);
+    doc.text(`Total de vueltas hoy (todos los conductores): ${vueltasTotal}`, 14, vFinalY + 8);
+  }
 
   doc.save(`resumen-checador-${todayFile}.pdf`);
 }

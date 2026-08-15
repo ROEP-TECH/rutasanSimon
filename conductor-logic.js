@@ -11,9 +11,6 @@ const pinScreen = document.getElementById('pinScreen');
 const mainScreen = document.getElementById('mainScreen');
 const pinInput = document.getElementById('pinInput');
 const pinError = document.getElementById('pinError');
-const driverNameInput = document.getElementById('driverNameInput');
-const saveNameBtn = document.getElementById('saveNameBtn');
-const nameSavedText = document.getElementById('nameSavedText');
 const checkpointBtn = document.getElementById('checkpointBtn');
 const checkpointSavedText = document.getElementById('checkpointSavedText');
 const toggleBtn = document.getElementById('toggleBtn');
@@ -26,8 +23,6 @@ const panicOverlay = document.getElementById('panicOverlay');
 const headerDriverName = document.getElementById('headerDriverName');
 const headerShiftDot = document.getElementById('headerShiftDot');
 const nameDisplayRow = document.getElementById('nameDisplayRow');
-const nameEditRow = document.getElementById('nameEditRow');
-const editNameBtn = document.getElementById('editNameBtn');
 const checkpointBtnLabel = document.getElementById('checkpointBtnLabel');
 const turnoBtn = document.getElementById('turnoBtn');
 const turnoReposoStatus = document.getElementById('turnoReposoStatus');
@@ -132,72 +127,17 @@ function goToPinScreen() {
 document.getElementById('backToPinBtn').addEventListener('click', goToPinScreen);
 
 // ----- NOMBRE DEL CONDUCTOR -----
+// Solo lectura: el conductor no puede editar su nombre desde este panel.
+// Lo asigna el dueño o el checador.
 function updateHeaderDriverName() {
   if (!headerDriverName) return;
-  const shown = (driverNameInput.value || currentDriver.name || '').trim();
+  const shown = (currentDriver.name || '').trim();
   headerDriverName.textContent = shown || 'Panel del Conductor';
 }
 
 function setupDriverNameField() {
-  driverNameInput.value = currentDriver.name || '';
   updateHeaderDriverName();
 }
-
-// El nombre ya no tiene tarjeta aparte: se edita directo en la barra de
-// arriba. Tocar el lápiz muestra el input; blur/Enter lo guarda y regresa
-// a mostrar el nombre normal.
-function openNameEdit() {
-  nameDisplayRow.classList.add('hidden');
-  nameEditRow.classList.remove('hidden');
-  nameEditRow.classList.add('flex');
-  driverNameInput.focus();
-  driverNameInput.select();
-}
-
-function closeNameEdit() {
-  nameEditRow.classList.add('hidden');
-  nameEditRow.classList.remove('flex');
-  nameDisplayRow.classList.remove('hidden');
-}
-
-editNameBtn.addEventListener('click', openNameEdit);
-
-// Refleja lo que va escribiendo en el header, aunque todavía no le dé blur/Enter
-driverNameInput.addEventListener('input', updateHeaderDriverName);
-
-async function saveDriverName() {
-  const newName = driverNameInput.value.trim();
-  closeNameEdit();
-
-  if (!newName || newName === currentDriver.name) {
-    updateHeaderDriverName();
-    return;
-  }
-
-  const { error } = await supabase
-    .from('drivers')
-    .update({ name: newName })
-    .eq('id', currentDriver.id);
-
-  if (!error) {
-    currentDriver.name = newName;
-    updateHeaderDriverName();
-    if (nameSavedText) {
-      nameSavedText.classList.remove('hidden');
-      setTimeout(() => nameSavedText.classList.add('hidden'), 2500);
-    }
-  } else {
-    console.error('Error guardando nombre:', error);
-  }
-}
-
-driverNameInput.addEventListener('blur', saveDriverName);
-driverNameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    driverNameInput.blur(); // dispara el guardado vía el listener de blur
-  }
-});
 
 // ----- RAMAL ASIGNADO -----
 let currentDriverRoute = 'capilla';
@@ -253,7 +193,7 @@ function setupCheckpointButton() {
 checkpointBtn.addEventListener('click', async () => {
   if (navigator.vibrate) navigator.vibrate(20);
   const cp = CHECKPOINTS[checkpointIdx];
-  const name = driverNameInput.value.trim() || currentDriver.name;
+  const name = currentDriver.name;
 
   const { error } = await supabase
     .from('route_events')

@@ -30,6 +30,8 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script type="importmap">
 {
@@ -163,6 +165,78 @@
   .driver-row .driver-name{ font-family:'Sora', sans-serif; font-weight:700; font-size:15px; color:var(--ink); }
   .driver-row .route-badge{ font-size:11px; font-weight:700; padding:.3rem .65rem; border-radius:999px; white-space:nowrap; }
 
+  /* ===== PANEL AMPLIADO (vista de escritorio, tipo admin) =====
+     Se agrega para que el checador pueda usar el mismo panel en una
+     PC de escritorio y ver el mapa en grande, además de todo lo que
+     ve el dueño: conductores, turno/reposo, alertas, etc. */
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:1.1rem; box-shadow:var(--shadow); }
+  .card-soft{ background:var(--surface-2); border:1px solid var(--border); border-radius:1rem; }
+
+  #map{ height:340px; width:100%; background:var(--surface-2); filter: saturate(.5) brightness(.62) contrast(1.05) invert(1) hue-rotate(180deg); }
+  html[data-theme="light"] #map{ filter: none; }
+  html[data-theme="light"] .leaflet-popup-content-wrapper,
+  html[data-theme="light"] .leaflet-popup-tip{ filter: none; }
+  .leaflet-container{ font-family:'Plus Jakarta Sans', sans-serif; background:var(--surface-2) !important; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{ background:var(--surface-3); color:var(--ink); filter: invert(1) hue-rotate(180deg); }
+  .leaflet-control-zoom a{ background:var(--surface-3) !important; color:var(--ink) !important; border-color:var(--border) !important; }
+
+  .status-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-dot.on{ background:var(--agave); box-shadow:0 0 0 4px var(--agave-glow); }
+  .status-dot.off{ background:var(--ink-faint); }
+
+  /* Filas de la lista de "Conductores" (distinto de .driver-row, que es para elegir conductor de una unidad) */
+  .fleet-row{ border-bottom:1px solid var(--border-soft); transition: background-color .18s ease; }
+  .fleet-row:last-child{ border-bottom:none; }
+  .fleet-row:hover{ background:var(--surface-2); }
+
+  .alert-card{ border:1.5px solid var(--alerta); background:var(--alerta-bg); border-radius:1rem; transition: all .3s ease; }
+  .alert-card.resolved{ border-color:var(--border); background:var(--surface-2); opacity:.65; }
+
+  #alarmBar{ display:none; }
+  #alarmBar.show{ display:flex; }
+  @keyframes alarmPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
+  #alarmBar.show{ animation: alarmPulse 1s ease-in-out infinite; }
+
+  /* Contador de vueltas (+/-) */
+  .vueltas-stepper{ display:inline-flex; align-items:center; gap:.4rem; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:.15rem .3rem; }
+  .vueltas-stepper button{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--surface-3); color:var(--ink); }
+  .vueltas-stepper button:active{ transform:scale(.9); }
+  .vueltas-stepper .vueltas-count{ min-width:1.4rem; text-align:center; font-family:'JetBrains Mono', monospace; font-weight:700; font-size:12px; }
+
+  /* Barra lateral de escritorio */
+  .nav-item{ color:var(--ink-soft); transition: all .18s ease; border-radius:.85rem; }
+  .nav-item:hover{ color:var(--ink); background:var(--surface-2); }
+  .nav-item.active{ color:var(--talavera); background:color-mix(in srgb, var(--talavera) 14%, var(--surface)); }
+
+  /* Menú móvil (hamburguesa) */
+  #mobileNavOverlay{ background:rgba(5,7,10,.6); backdrop-filter: blur(2px); }
+  #mobileNavPanel{
+    box-shadow: 20px 0 50px -18px rgba(0,0,0,.7);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    transform: translateX(-100%);
+  }
+  #mobileNavPanel.open{ transform: translateX(0); }
+  .mobile-nav-item{ color:var(--ink-soft); transition: all .18s ease; border-radius:.85rem; }
+  .mobile-nav-item:hover{ color:var(--ink); background:var(--surface-2); }
+  .mobile-nav-item.active{ color:var(--talavera); background:color-mix(in srgb, var(--talavera) 14%, var(--surface)); }
+
+  /* Drawer de ficha del conductor */
+  #driverDrawerOverlay{ background:rgba(5,7,10,.6); backdrop-filter: blur(2px); }
+  #driverDrawer{
+    box-shadow: -20px 0 50px -18px rgba(0,0,0,.7);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    transform: translateX(100%);
+  }
+  #driverDrawer.open{ transform: translateX(0); }
+  @media (max-width: 640px){
+    #driverDrawer{
+      top:auto; bottom:0; left:0; right:0; max-width:none; max-height:85vh;
+      border-radius:1.25rem 1.25rem 0 0; border-left:none; border-top:1px solid var(--border);
+      transform: translateY(100%);
+    }
+    #driverDrawer.open{ transform: translateY(0); }
+  }
+
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-thumb{ background:var(--surface-3); border-radius:999px; }
   ::selection{ background: var(--talavera-glow); }
@@ -196,54 +270,188 @@
   </div>
 </div>
 
-<!-- PANEL PRINCIPAL -->
-<div id="mainScreen" class="hidden min-h-screen flex flex-col items-center px-5 py-8 pb-16">
-  <header class="w-full max-w-sm flex items-center justify-between gap-2 mb-5">
-    <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i>
-    </button>
-    <div class="text-left flex-1 min-w-0">
-      <h1 class="font-display font-semibold text-xl truncate">Panel del Checador</h1>
-      <p class="text-sm truncate" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
-    </div>
-    <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
-      <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
-    </button>
-    <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
-      <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
-      <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
-    </button>
-  </header>
-
-  <div class="w-full max-w-sm flex items-center justify-between gap-2 mb-6 flex-wrap">
-    <p class="text-sm flex items-center gap-1.5 min-w-0" style="color:var(--ink-soft);">
-      <i data-lucide="user-check" class="w-4 h-4 shrink-0"></i>
-      <span class="truncate">Hola, <span id="checadorNameText" class="font-display font-semibold" style="color:var(--ink);">—</span></span>
-    </p>
-    <button id="ubicacionChip" class="max-w-full min-w-0">
-      <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0"></i>
-      <span id="ubicacionText" class="truncate">Sin ubicación</span>
-      <span style="opacity:.6;" class="shrink-0">· cambiar</span>
-    </button>
-  </div>
-
-  <div class="w-full max-w-sm">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="bus" class="w-4 h-4"></i></span>
-      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Toca la unidad que pasó</span>
-    </div>
-    <div id="unitsGrid"></div>
-    <p id="unitsEmpty" class="hidden text-sm text-center mt-4" style="color:var(--ink-soft);">Todavía no hay unidades dadas de alta.</p>
-    <p class="text-[11px] mt-4 text-center" style="color:var(--ink-soft);">Toca la unidad y luego elige al conductor que le tocó hoy.</p>
-  </div>
-
-  <div class="w-full max-w-sm mt-7">
-    <button id="sendSummaryBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
-      <i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF del día
-    </button>
-    <p class="text-[11px] mt-2 text-center" style="color:var(--ink-soft);">Arma una tabla con todos tus registros de hoy y la descarga como PDF.</p>
-  </div>
+<!-- BARRA DE ALARMA (alerta de pánico activa) -->
+<div id="alarmBar" class="fixed top-0 inset-x-0 z-[80] items-center justify-between gap-3 px-4 py-3" style="background:linear-gradient(155deg, var(--alerta) 0%, #A9382C 100%); color:#fff;">
+  <span class="font-display font-semibold text-sm flex items-center gap-2"><i data-lucide="siren" class="w-4 h-4"></i> Alerta de ayuda activa</span>
+  <button id="silenceBtn" class="btn-lift text-xs font-semibold px-3 py-1.5 rounded-full" style="background:rgba(255,255,255,.2);">Silenciar</button>
 </div>
+
+<!-- PANEL PRINCIPAL: mismo esqueleto que el panel del dueño (sidebar de escritorio +
+     menú móvil), para que el checador pueda usar una PC de escritorio y ver el mapa
+     en grande, además del registro rápido que ya usaba desde el celular. -->
+<div id="mainScreen" class="hidden min-h-screen md:flex">
+
+  <!-- SIDEBAR (escritorio) -->
+  <aside class="hidden md:flex md:w-60 shrink-0 flex-col gap-1 p-4 border-r" style="border-color:var(--border); background:var(--surface);">
+    <div class="flex items-center gap-2.5 px-2 py-2 mb-4">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="clipboard-check" class="w-4.5 h-4.5"></i></div>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm leading-tight truncate">Ruta San Simón</p>
+        <p class="text-[11px] font-mono leading-tight" style="color:var(--ink-soft);">R-18 · Panel checador</p>
+      </div>
+    </div>
+
+    <a href="#registro" class="nav-item active flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registro rápido</a>
+    <a href="#conductores" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
+    <a href="#mapa" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
+    <a href="#avisos" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
+    <a href="#alertas" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="bell" class="w-4 h-4"></i> Alertas</a>
+
+    <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
+      <button id="logoutBtnDesktop" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
+        <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 min-w-0 max-w-5xl w-full mx-auto px-4 md:px-8 pt-6 pb-16 space-y-5">
+
+    <!-- HEADER -->
+    <header class="sticky top-0 z-40 -mx-4 md:-mx-8 px-4 md:px-8 py-3 flex items-center justify-between gap-2" style="background:color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom:1px solid var(--border-soft);">
+      <div class="flex items-center gap-2 min-w-0">
+        <button id="mobileNavOpen" aria-label="Abrir menú" class="btn-lift md:hidden flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <i data-lucide="menu" class="w-4 h-4"></i>
+        </button>
+        <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift hidden md:flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </button>
+        <div class="min-w-0">
+          <p class="text-sm flex items-center gap-1.5 min-w-0" style="color:var(--ink-soft);">
+            <i data-lucide="user-check" class="w-4 h-4 shrink-0"></i>
+            <span class="truncate">Hola, <span id="checadorNameText" class="font-display font-semibold" style="color:var(--ink);">—</span></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="ubicacionChip" class="max-w-[9rem] sm:max-w-none min-w-0">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0"></i>
+          <span id="ubicacionText" class="truncate">Sin ubicación</span>
+          <span style="opacity:.6;" class="shrink-0 hidden sm:inline">· cambiar</span>
+        </button>
+        <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Instalar</span>
+        </button>
+        <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+          <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+          <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    <section id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="radio" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>En ruta</span></p>
+        <p id="kpiOnRoute" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--agave);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="coffee" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>En reposo</span></p>
+        <p id="kpiReposo" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--cempasuchil);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="repeat" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>Vueltas hoy</span></p>
+        <p id="kpiVueltas" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--talavera);">—</p>
+      </div>
+      <div class="card p-3 sm:p-4">
+        <p class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide flex items-start gap-1.5 leading-tight" style="color:var(--ink-soft);"><i data-lucide="siren" class="w-3.5 h-3.5 shrink-0 mt-px"></i> <span>Alertas activas</span></p>
+        <p id="kpiAlerts" class="font-display font-bold text-xl sm:text-2xl mt-1.5" style="color:var(--alerta);">—</p>
+      </div>
+    </section>
+
+    <!-- REGISTRO RÁPIDO (lo que ya tenía el checador) -->
+    <section id="registro" class="card p-4 scroll-mt-24">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="bus" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Toca la unidad que pasó</span>
+      </div>
+      <div id="unitsGrid" class="max-w-sm"></div>
+      <p id="unitsEmpty" class="hidden text-sm text-center mt-4" style="color:var(--ink-soft);">Todavía no hay unidades dadas de alta.</p>
+      <p class="text-[11px] mt-4" style="color:var(--ink-soft);">Toca la unidad y luego elige al conductor que le tocó hoy. Mantén presionado su nombre para marcar retraso o inasistencia.</p>
+
+      <div class="max-w-sm mt-6">
+        <button id="sendSummaryBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
+          <i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF del día
+        </button>
+        <p class="text-[11px] mt-2" style="color:var(--ink-soft);">Arma una tabla con todos tus registros de hoy (y las vueltas de cada conductor) y la descarga como PDF.</p>
+      </div>
+    </section>
+
+    <!-- CONDUCTORES: turno, reposo y vueltas de cada uno, igual que ve el dueño -->
+    <section id="conductores" class="card p-4 scroll-mt-24">
+      <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+        <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="users" class="w-4 h-4"></i> Conductores</h2>
+        <span id="driversOnlineCount" class="text-[11px] font-mono" style="color:var(--ink-soft);">—</span>
+      </div>
+      <div id="driversList" class="divide-y" style="border-color:var(--border-soft);"></div>
+      <p id="driversEmpty" class="hidden text-sm text-center py-4" style="color:var(--ink-soft);">Todavía no hay conductores dados de alta.</p>
+    </section>
+
+    <!-- AVISOS DE RUTA (lo que reportan los propios conductores: salió/llegó) -->
+    <section id="avisos" class="card p-4 scroll-mt-24">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="flag" class="w-4 h-4"></i> Avisos recientes</h2>
+      <div id="routeEventsList" class="space-y-2.5">
+        <p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>
+      </div>
+    </section>
+
+    <!-- MAPA (grande, pensado para verse en una PC de escritorio) -->
+    <section id="mapa" class="card overflow-hidden scroll-mt-24">
+      <div class="px-4 pt-4 pb-1">
+        <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
+      </div>
+      <div id="map"></div>
+    </section>
+
+    <!-- ALERTAS DE AYUDA -->
+    <section id="alertas" class="scroll-mt-24">
+      <h2 class="font-display font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="bell" class="w-4 h-4"></i> Alertas de ayuda</h2>
+      <div id="alertsEmpty" class="card p-4 text-sm text-center flex items-center justify-center gap-1.5" style="color:var(--ink-soft);">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i> No hay alertas por ahora.
+      </div>
+      <div id="alertsList" class="space-y-2.5"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- MENÚ MÓVIL (hamburguesa) -->
+<div id="mobileNavOverlay" class="hidden fixed inset-0 z-[90] md:hidden"></div>
+<aside id="mobileNavPanel" class="hidden fixed top-0 left-0 z-[95] h-full w-72 max-w-[80vw] flex-col gap-1 p-4 md:hidden" style="background:var(--surface); border-right:1px solid var(--border); display:flex;">
+  <div class="flex items-center justify-between gap-2.5 px-2 py-2 mb-4">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="clipboard-check" class="w-4.5 h-4.5"></i></div>
+      <div class="min-w-0">
+        <p class="font-display font-semibold text-sm leading-tight truncate">Ruta San Simón</p>
+        <p class="text-[11px] font-mono leading-tight" style="color:var(--ink-soft);">R-18 · Panel checador</p>
+      </div>
+    </div>
+    <button id="mobileNavClose" aria-label="Cerrar menú" class="btn-lift w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border);"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </div>
+
+  <a href="#registro" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registro rápido</a>
+  <a href="#conductores" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
+  <a href="#mapa" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
+  <a href="#avisos" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
+  <a href="#alertas" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="bell" class="w-4 h-4"></i> Alertas</a>
+
+  <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
+    <button id="logoutBtnMobileNav" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
+      <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
+    </button>
+  </div>
+</aside>
+
+<!-- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -->
+<div id="driverDrawerOverlay" class="hidden fixed inset-0 z-[90]"></div>
+<aside id="driverDrawer" class="hidden fixed top-0 right-0 z-[95] h-full w-full max-w-sm flex flex-col" style="background:var(--surface); border-left:1px solid var(--border);">
+  <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color:var(--border);">
+    <h3 class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Ficha del conductor</h3>
+    <button id="driverDrawerClose" class="btn-lift w-8 h-8 rounded-full flex items-center justify-center" style="background:var(--surface-2); border:1px solid var(--border);"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </div>
+  <div id="driverDrawerContent" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"></div>
+</aside>
 
 <!-- TOAST DE CONFIRMACIÓN -->
 <div id="toast">

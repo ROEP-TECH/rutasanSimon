@@ -103,14 +103,6 @@
 
   #pinInput{ letter-spacing:.15em; }
 
-  /* Chip de ubicación */
-  #ubicacionChip{
-    border:1.5px solid var(--border); background:var(--surface-2); color:var(--ink);
-    border-radius:999px; padding:.55rem 1rem; font-size:13px; font-weight:600;
-    display:inline-flex; align-items:center; gap:.4rem; transition: all .2s ease;
-  }
-  #ubicacionChip:hover{ border-color:var(--talavera); transform: translateY(-1px); }
-
   /* Cuadrícula de unidades */
   #unitsGrid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:.75rem; }
   .unit-btn{
@@ -291,9 +283,9 @@
       </div>
     </div>
 
-    <a href="#registro" class="nav-item active flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registro rápido</a>
+    <a href="#registro" class="nav-item active flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Incidencias</a>
     <a href="#conductores" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
-    <a href="#mapa" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
+    <a href="mapa-vivo.html" target="_blank" rel="noopener" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa <i data-lucide="external-link" class="w-3 h-3 ml-auto opacity-60"></i></a>
     <a href="#avisos" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
     <a href="#alertas" class="nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="bell" class="w-4 h-4"></i> Alertas</a>
 
@@ -325,11 +317,6 @@
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <button id="ubicacionChip" class="max-w-[9rem] sm:max-w-none min-w-0">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0"></i>
-          <span id="ubicacionText" class="truncate">Sin ubicación</span>
-          <span style="opacity:.6;" class="shrink-0 hidden sm:inline">· cambiar</span>
-        </button>
         <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
           <i data-lucide="download" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Instalar</span>
         </button>
@@ -360,21 +347,21 @@
       </div>
     </section>
 
-    <!-- REGISTRO RÁPIDO (lo que ya tenía el checador) -->
+    <!-- REPORTAR INCIDENCIA (retraso o inasistencia) -->
     <section id="registro" class="card p-4 scroll-mt-24">
       <div class="flex items-center gap-2 mb-3">
-        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="bus" class="w-4 h-4"></i></span>
-        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Toca la unidad que pasó</span>
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="alert-triangle" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reportar incidencia</span>
       </div>
       <div id="unitsGrid" class="max-w-sm"></div>
       <p id="unitsEmpty" class="hidden text-sm text-center mt-4" style="color:var(--ink-soft);">Todavía no hay unidades dadas de alta.</p>
-      <p class="text-[11px] mt-4" style="color:var(--ink-soft);">Toca la unidad y luego elige al conductor que le tocó hoy. Mantén presionado su nombre para marcar retraso o inasistencia.</p>
+      <p class="text-[11px] mt-4" style="color:var(--ink-soft);">Toca la unidad, elige al conductor que le tocaba hoy y marca si llegó tarde o no se presentó.</p>
 
       <div class="max-w-sm mt-6">
         <button id="sendSummaryBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
           <i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF del día
         </button>
-        <p class="text-[11px] mt-2" style="color:var(--ink-soft);">Arma una tabla con todos tus registros de hoy (y las vueltas de cada conductor) y la descarga como PDF.</p>
+        <p class="text-[11px] mt-2" style="color:var(--ink-soft);">Arma una tabla con las vueltas de hoy de cada conductor y la descarga como PDF.</p>
       </div>
     </section>
 
@@ -396,8 +383,8 @@
       </div>
     </section>
 
-    <!-- MAPA (grande, pensado para verse en una PC de escritorio) -->
-    <section id="mapa" class="card overflow-hidden scroll-mt-24">
+    <!-- MAPA (solo en celular; en escritorio "Mapa" abre mapa-vivo.html en una pestaña aparte) -->
+    <section id="mapa" class="card overflow-hidden scroll-mt-24 md:hidden">
       <div class="px-4 pt-4 pb-1">
         <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
       </div>
@@ -430,7 +417,7 @@
     <button id="mobileNavClose" aria-label="Cerrar menú" class="btn-lift w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border);"><i data-lucide="x" class="w-4 h-4"></i></button>
   </div>
 
-  <a href="#registro" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="clipboard-check" class="w-4 h-4"></i> Registro rápido</a>
+  <a href="#registro" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Incidencias</a>
   <a href="#conductores" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="users" class="w-4 h-4"></i> Conductores</a>
   <a href="#mapa" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="map" class="w-4 h-4"></i> Mapa</a>
   <a href="#avisos" class="mobile-nav-item flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"><i data-lucide="flag" class="w-4 h-4"></i> Avisos</a>
@@ -459,26 +446,11 @@
   <span id="toastText"></span>
 </div>
 
-<!-- OVERLAY: UBICACIÓN -->
-<div id="ubicacionOverlay" class="sheet-overlay">
-  <div class="sheet">
-    <p id="ubicacionTitle" class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="map-pin"></i> ¿Dónde estás hoy?</p>
-    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Escribe tu punto de control. Se queda guardado en este celular para los próximos días.</p>
-    <input id="ubicacionInput" type="text" maxlength="40" placeholder="Ej. Base San Simón"
-           class="mt-3.5 w-full px-3.5 py-3 rounded-2xl border font-display font-semibold"
-           style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
-    <div class="flex gap-2.5 mt-4">
-      <button id="ubicacionCancelBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
-      <button id="ubicacionSaveBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Guardar</button>
-    </div>
-  </div>
-</div>
-
 <!-- OVERLAY: ELEGIR CONDUCTOR DE LA UNIDAD -->
 <div id="unitDriversOverlay" class="sheet-overlay">
   <div class="sheet">
     <p id="unitDriversTitle" class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="users"></i> Unidad —</p>
-    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Toca al conductor que traía la unidad hoy. Mantén presionado su nombre para marcar retraso o que no se presentó.</p>
+    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Toca al conductor que traía la unidad hoy para reportar si llegó tarde o no se presentó.</p>
     <div id="unitDriversList" class="flex flex-col gap-2.5 mt-4"></div>
     <button id="unitDriversCancelBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard mt-3">Cancelar</button>
   </div>

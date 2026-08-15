@@ -23,32 +23,17 @@ const coordsText = document.getElementById('coordsText');
 const updatedText = document.getElementById('updatedText');
 const panicBtn = document.getElementById('panicBtn');
 const panicOverlay = document.getElementById('panicOverlay');
+const headerDriverName = document.getElementById('headerDriverName');
+const headerShiftDot = document.getElementById('headerShiftDot');
+const turnoBtn = document.getElementById('turnoBtn');
+const turnoStatusText = document.getElementById('turnoStatusText');
+const reposoBtn = document.getElementById('reposoBtn');
+const reposoStatusText = document.getElementById('reposoStatusText');
 
 let currentDriver = null;
 let watchId = null;
 let locationChannel = null;
 let eventChannel = null;
-
-// Audio silencioso: mientras esté sonando, Chrome/Android no congela la
-// pestaña en segundo plano, así el watchPosition sigue mandando ubicación
-// aunque el chofer se salga a otra app o apague la pantalla un rato.
-const keepAliveAudio = document.getElementById('keepAliveAudio');
-
-function startKeepAliveAudio() {
-  if (!keepAliveAudio) return;
-  keepAliveAudio.play().catch((e) => {
-    // Si el navegador bloquea el autoplay aquí es raro, porque esto se
-    // dispara dentro del click del botón (gesto de usuario), pero por si
-    // las dudas no tronamos nada si falla.
-    console.warn('No se pudo iniciar audio keep-alive:', e);
-  });
-}
-
-function stopKeepAliveAudio() {
-  if (!keepAliveAudio) return;
-  keepAliveAudio.pause();
-  keepAliveAudio.currentTime = 0;
-}
 
 // Wake Lock: evita que la pantalla se apague sola mientras se comparte
 // ubicación. En varios Android, si se apaga la pantalla el sistema es más
@@ -82,13 +67,12 @@ async function releaseWakeLock() {
 
 // Recuperación automática: cuando el chofer regresa a la pestaña (venía de
 // otra app, o encendió la pantalla), si la ubicación sigue "encendida" del
-// lado de la UI, reforzamos audio y wake lock por si el navegador los soltó.
+// lado de la UI, reforzamos el wake lock por si el navegador lo soltó.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (Capacitor.isNativePlatform()) return;
   if (!toggleBtn.classList.contains('on')) return;
 
-  if (keepAliveAudio && keepAliveAudio.paused) startKeepAliveAudio();
   if (!wakeLock) requestWakeLock();
 });
 
@@ -123,6 +107,8 @@ function unlock(driver) {
   setupDriverNameField();
   setupDriverRoute();
   setupCheckpointButton();
+  setupTurnoState();
+  setupReposoState();
   if (window.lucide) lucide.createIcons();
 }
 
@@ -131,6 +117,8 @@ function goToPinScreen() {
   if (watchId !== null) stopSharing();
   if (locationChannel) supabase.removeChannel(locationChannel);
   if (eventChannel) supabase.removeChannel(eventChannel);
+  stopReposoCountdown();
+  reposoUntil = null;
   localStorage.removeItem('rss_driver_id');
   currentDriver = null;
   mainScreen.classList.add('hidden');
@@ -141,9 +129,19 @@ function goToPinScreen() {
 document.getElementById('backToPinBtn').addEventListener('click', goToPinScreen);
 
 // ----- NOMBRE DEL CONDUCTOR -----
+function updateHeaderDriverName() {
+  if (!headerDriverName) return;
+  const shown = (driverNameInput.value || currentDriver.name || '').trim();
+  headerDriverName.textContent = shown || 'Panel del Conductor';
+}
+
 function setupDriverNameField() {
   driverNameInput.value = currentDriver.name || '';
+  updateHeaderDriverName();
 }
+
+// Refleja lo que va escribiendo en el header, aunque todavía no le dé blur/Enter
+driverNameInput.addEventListener('input', updateHeaderDriverName);
 
 async function saveDriverName() {
   const newName = driverNameInput.value.trim();
@@ -156,6 +154,7 @@ async function saveDriverName() {
 
   if (!error) {
     currentDriver.name = newName;
+    updateHeaderDriverName();
     if (nameSavedText) {
       nameSavedText.classList.remove('hidden');
       setTimeout(() => nameSavedText.classList.add('hidden'), 3000);
@@ -249,6 +248,152 @@ checkpointBtn.addEventListener('click', async () => {
   checkpointIdx = (checkpointIdx + 1) % CHECKPOINTS.length;
   localStorage.setItem('rss_checkpoint_idx_' + currentDriver.id, String(checkpointIdx));
   updateCheckpointButtonLabel();
+});
+
+// ----- TURNO (INICIAR / TERMINAR) -----
+// Es independiente del botón de ubicación: solo lleva registro de cuándo
+// el chofer empieza y termina su jornada. NO prende ni apaga el GPS.
+// Requiere en Supabase, tabla "drivers": columnas on_shift (bool) y
+// shift_started_at (timestamptz).
+let onShift = false;
+
+function renderTurnoBtn() {
+  if (onShift) {
+    turnoBtn.classList.add('on');
+    turnoBtn.textContent = 'Terminar mi turno';
+    turnoStatusText.textContent = 'Turno en curso. Presiona cuando termines tu jornada.';
+    if (headerShiftDot) headerShiftDot.classList.remove('hidden');
+  } else {
+    turnoBtn.classList.remove('on');
+    turnoBtn.textContent = 'Iniciar mi turno';
+    turnoStatusText.textContent = 'Marca cuando empiezas y cuando terminas tu jornada.';
+    if (headerShiftDot) headerShiftDot.classList.add('hidden');
+  }
+}
+
+function setupTurnoState() {
+  onShift = !!currentDriver.on_shift;
+  renderTurnoBtn();
+}
+
+turnoBtn.addEventListener('click', async () => {
+  if (navigator.vibrate) navigator.vibrate(20);
+  const startingShift = !onShift;
+
+  const payload = startingShift
+    ? { on_shift: true, shift_started_at: new Date().toISOString() }
+    : { on_shift: false };
+
+  const { error } = await supabase
+    .from('drivers')
+    .update(payload)
+    .eq('id', currentDriver.id);
+
+  if (error) {
+    console.error('Error actualizando turno:', error);
+    return;
+  }
+
+  onShift = startingShift;
+  currentDriver.on_shift = onShift;
+  renderTurnoBtn();
+});
+
+// ----- REPOSO (15 MIN) -----
+// Nada más es un aviso para el dueño/checador (los pasajeros no lo ven) y
+// se quita solo pasados 15 minutos. No afecta la ubicación, que se queda
+// prendida todo el tiempo. Requiere en Supabase, tabla "drivers": columna
+// resting_until (timestamptz, nullable).
+const REPOSO_MINUTES = 15;
+let reposoUntil = null;
+let reposoIntervalId = null;
+
+function formatMMSS(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function renderReposoBtn() {
+  const remaining = reposoUntil ? reposoUntil.getTime() - Date.now() : 0;
+
+  if (reposoUntil && remaining > 0) {
+    reposoBtn.classList.add('active');
+    reposoBtn.textContent = 'En reposo · ' + formatMMSS(remaining) + ' (toca para cancelar)';
+    reposoStatusText.textContent = 'El dueño y el checador ven que estás en reposo. Se quita solo.';
+  } else {
+    reposoBtn.classList.remove('active');
+    reposoBtn.textContent = 'Marcar ' + REPOSO_MINUTES + ' min de reposo';
+    reposoStatusText.textContent = 'Le avisa al dueño y al checador que estás parado descansando. Se quita solo. Los pasajeros no lo ven.';
+  }
+}
+
+function stopReposoCountdown() {
+  if (reposoIntervalId !== null) {
+    clearInterval(reposoIntervalId);
+    reposoIntervalId = null;
+  }
+}
+
+async function clearReposo() {
+  stopReposoCountdown();
+  reposoUntil = null;
+  renderReposoBtn();
+  const { error } = await supabase
+    .from('drivers')
+    .update({ resting_until: null })
+    .eq('id', currentDriver.id);
+  if (error) console.error('Error limpiando reposo:', error);
+}
+
+function startReposoCountdown() {
+  stopReposoCountdown();
+  reposoIntervalId = setInterval(() => {
+    if (!reposoUntil || reposoUntil.getTime() - Date.now() <= 0) {
+      clearReposo();
+      return;
+    }
+    renderReposoBtn();
+  }, 1000);
+}
+
+function setupReposoState() {
+  const saved = currentDriver.resting_until ? new Date(currentDriver.resting_until) : null;
+  if (saved && saved.getTime() > Date.now()) {
+    reposoUntil = saved;
+    renderReposoBtn();
+    startReposoCountdown();
+  } else {
+    reposoUntil = null;
+    renderReposoBtn();
+  }
+}
+
+reposoBtn.addEventListener('click', async () => {
+  if (navigator.vibrate) navigator.vibrate(20);
+
+  // Si ya está en reposo, tocar el botón lo cancela antes de tiempo.
+  if (reposoUntil) {
+    await clearReposo();
+    return;
+  }
+
+  const until = new Date(Date.now() + REPOSO_MINUTES * 60 * 1000);
+  const { error } = await supabase
+    .from('drivers')
+    .update({ resting_until: until.toISOString() })
+    .eq('id', currentDriver.id);
+
+  if (error) {
+    console.error('Error marcando reposo:', error);
+    return;
+  }
+
+  currentDriver.resting_until = until.toISOString();
+  reposoUntil = until;
+  renderReposoBtn();
+  startReposoCountdown();
 });
 
 // ----- UBICACIÓN EN VIVO -----
@@ -367,7 +512,6 @@ function startSharing() {
     timeout: 15000,
   });
 
-  startKeepAliveAudio();
   requestWakeLock();
 }
 
@@ -377,7 +521,6 @@ async function stopSharing() {
   } else if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
-    stopKeepAliveAudio();
     releaseWakeLock();
   }
 

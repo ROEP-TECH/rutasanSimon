@@ -1,4 +1,5 @@
 import { supabase } from './supabase-config.js';
+import { initPushNotifications } from './push-notifications.js';
 
 let currentUser = null;
 let currentOwner = null;
@@ -71,6 +72,11 @@ async function tryLogin() {
 
   initRealtimeListeners();
   if (window.lucide) lucide.createIcons();
+
+  // Notificaciones push forzosas: que le lleguen las alertas aunque tenga
+  // el panel cerrado o el celular bloqueado (requiere que el panel esté
+  // instalado desde Chrome). Ver push-notifications.js para la config.
+  initPushNotifications('dueno', owner.id, owner.name || currentUser.email);
 }
 
 // ----- CIERRE DE SESIÓN -----

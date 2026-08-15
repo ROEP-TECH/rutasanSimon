@@ -1,4 +1,5 @@
 import { supabase } from './supabase-config.js';
+import { initPushNotifications } from './push-notifications.js';
 
 // Capacitor se inyecta como objeto global (window.Capacitor) dentro de la app nativa.
 // Los plugins ya sincronizados quedan disponibles en window.Capacitor.Plugins — no
@@ -108,6 +109,13 @@ function unlock(driver) {
   setupTurnoState();
   setupReposoState();
   if (window.lucide) lucide.createIcons();
+
+  // Notificaciones push forzosas (solo cuando el panel corre como PWA
+  // instalada desde Chrome; en la app nativa empacada con Capacitor esto
+  // se maneja con el plugin de notificaciones nativo, no con Web Push).
+  if (!Capacitor.isNativePlatform()) {
+    initPushNotifications('conductor', driver.id, driver.name);
+  }
 }
 
 // ----- CIERRE DE SESIÓN -----

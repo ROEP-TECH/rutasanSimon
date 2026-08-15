@@ -8,12 +8,15 @@ let locationChannel = null;
 let routeChannel = null;
 let alertChannel = null;
 let checadorEventsChannel = null;
+let driversStatusChannel = null;
+let vueltasChannel = null;
 let mapInitialized = false; // Evita que el mapa se duplique
 
 // Caché en memoria de la última carga, para alimentar el drawer y las búsquedas sin volver a pedir datos
 let lastDrivers = [];
 let lastChecadorEvents = [];
 let lastRouteEvents = []; // checkpoints que reporta el propio conductor (salió/llegó), para mostrarlos en su ficha
+let lastVueltas = {}; // driver_id -> vueltas de hoy (lo asigna el checador)
 let driverSearchTerm = '';
 
 // Elementos DOM
@@ -77,12 +80,15 @@ async function doLogout() {
   if (routeChannel) supabase.removeChannel(routeChannel);
   if (alertChannel) supabase.removeChannel(alertChannel);
   if (checadorEventsChannel) supabase.removeChannel(checadorEventsChannel);
+  if (driversStatusChannel) supabase.removeChannel(driversStatusChannel);
+  if (vueltasChannel) supabase.removeChannel(vueltasChannel);
   currentUser = null;
   currentOwner = null;
   mapInitialized = false; // Reiniciamos el flag al cerrar sesión
   lastDrivers = [];
   lastChecadorEvents = [];
   lastRouteEvents = [];
+  lastVueltas = {};
   closeDriverDrawer();
   closeMobileNav();
   mainScreen.classList.add('hidden');
@@ -126,6 +132,45 @@ function routeLabelFor(route) {
 }
 function routeColorFor(route) {
   return route === 'capilla' ? 'var(--cempasuchil)' : route === 'secundaria' ? 'var(--agave)' : 'var(--ink-faint)';
+}
+
+// ----- TURNO / REPOSO (lo reporta el propio conductor desde su panel) -----
+// Se lee directo de la tabla "drivers": on_shift, shift_started_at, resting_until.
+function turnoReposoInfo(d) {
+  const restingUntil = d.resting_until ? new Date(d.resting_until) : null;
+  const resting = !!(restingUntil && restingUntil.getTime() > Date.now());
+  return { onShift: !!d.on_shift, resting, restingUntil };
+}
+
+function turnoReposoBadgeHtml(d) {
+  const { onShift, resting, restingUntil } = turnoReposoInfo(d);
+  if (resting) {
+    const mins = Math.max(0, Math.ceil((restingUntil.getTime() - Date.now()) / 60000));
+    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--cempasuchil) 20%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="coffee" class="w-3 h-3"></i> Reposo · ${mins} min</span>`;
+  }
+  if (onShift) {
+    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--agave) 20%, var(--surface)); color:var(--agave);"><i data-lucide="play-circle" class="w-3 h-3"></i> En turno</span>`;
+  }
+  return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:var(--surface-2); color:var(--ink-faint);"><i data-lucide="pause-circle" class="w-3 h-3"></i> Fuera de turno</span>`;
+}
+
+// ----- VUELTAS DEL DÍA (las va asignando el checador desde su panel) -----
+async function loadVueltasToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('driver_vueltas')
+    .select('driver_id, vueltas')
+    .eq('date', today);
+
+  if (error) { console.error('Error cargando vueltas del día:', error); return; }
+
+  lastVueltas = {};
+  (data || []).forEach((v) => { lastVueltas[v.driver_id] = v.vueltas; });
+}
+
+function vueltasBadgeHtml(driverId) {
+  const n = lastVueltas[driverId] ?? 0;
+  return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink-soft);"><i data-lucide="repeat" class="w-3 h-3"></i> ${n} vuelta${n === 1 ? '' : 's'} hoy</span>`;
 }
 
 function driverIcon(route) {
@@ -248,9 +293,14 @@ function openDriverDrawer(driverId) {
       </div>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-1.5">
       <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full" style="background:${routeColorFor(d.route)}; color:#08131c;">${routeLabelFor(d.route)}</span>
       <span class="flex items-center gap-1.5 text-xs font-semibold" style="color:var(--ink-soft);"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}</span>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-1.5">
+      ${turnoReposoBadgeHtml(d)}
+      ${vueltasBadgeHtml(d.id)}
     </div>
 
     <div class="card-soft p-3">
@@ -345,12 +395,38 @@ function initRealtimeListeners() {
       console.log('[Realtime] checador_events:', status, err || '');
     });
 
+  // Turno / reposo: los cambia el propio conductor desde su panel (drivers.on_shift, resting_until)
+  driversStatusChannel = supabase
+    .channel('drivers-status-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' },
+      () => { renderDriversAndMap(); }
+    )
+    .subscribe((status, err) => {
+      console.log('[Realtime] drivers (turno/reposo):', status, err || '');
+    });
+
+  // Vueltas del día: las asigna el checador desde su panel
+  vueltasChannel = supabase
+    .channel('driver-vueltas-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_vueltas' },
+      () => { renderDriversAndMap(); }
+    )
+    .subscribe((status, err) => {
+      console.log('[Realtime] driver_vueltas:', status, err || '');
+    });
+
   // Carga inicial
   renderDriversAndMap();
   renderRouteEvents();
   renderAlerts();
   renderChecadorEvents();
 }
+
+// Refresca cada 30s nada más para que la cuenta regresiva de "Reposo · X min"
+// no se quede pegada entre eventos de tiempo real.
+setInterval(() => {
+  if (currentOwner) renderDriversList();
+}, 30000);
 
 // ----- RENDERIZAR CONDUCTORES Y MAPA (CON FILTRO ADMIN/OWNER) -----
 async function renderDriversAndMap() {
@@ -378,6 +454,7 @@ async function renderDriversAndMap() {
   }
 
   lastDrivers = drivers || [];
+  await loadVueltasToday();
   renderDriversList();
   renderFleetPulse();
 }
@@ -445,7 +522,11 @@ function renderDriversList() {
         <div class="min-w-0">
           <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
           <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
-          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block" style="background:${routeColor}; color:#08131c;">${routeLabel}</span>
+          <div class="flex flex-wrap items-center gap-1 mt-1">
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block" style="background:${routeColor}; color:#08131c;">${routeLabel}</span>
+            ${turnoReposoBadgeHtml(d)}
+            ${vueltasBadgeHtml(d.id)}
+          </div>
         </div>
       </div>
       <span class="flex items-center gap-1.5 sm:gap-2.5 text-xs font-semibold shrink-0">

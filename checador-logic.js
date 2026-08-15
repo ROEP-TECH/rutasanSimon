@@ -15,18 +15,10 @@ const mainScreen = document.getElementById('mainScreen');
 const pinInput = document.getElementById('pinInput');
 const pinError = document.getElementById('pinError');
 const checadorNameText = document.getElementById('checadorNameText');
-const ubicacionChip = document.getElementById('ubicacionChip');
-const ubicacionText = document.getElementById('ubicacionText');
 const unitsGrid = document.getElementById('unitsGrid');
 const unitsEmpty = document.getElementById('unitsEmpty');
 const toast = document.getElementById('toast');
 const toastText = document.getElementById('toastText');
-
-const ubicacionOverlay = document.getElementById('ubicacionOverlay');
-const ubicacionInput = document.getElementById('ubicacionInput');
-const ubicacionSaveBtn = document.getElementById('ubicacionSaveBtn');
-const ubicacionCancelBtn = document.getElementById('ubicacionCancelBtn');
-const ubicacionTitle = document.getElementById('ubicacionTitle');
 
 const unitDriversOverlay = document.getElementById('unitDriversOverlay');
 const unitDriversTitle = document.getElementById('unitDriversTitle');
@@ -45,13 +37,9 @@ const switchChecadorBtn = document.getElementById('switchChecadorBtn'); // puede
 const sendSummaryBtn = document.getElementById('sendSummaryBtn');
 
 let currentChecador = null;
-let currentUbicacion = null;
 let driversChannel = null;
 let toastTimer = null;
-let longPressTimer = null;
-let longPressFired = false;
 let pendingIncidentDriver = null; // objeto {driverId, unitId, driverName, route, ownerId, unitNumber}
-let allowUbicacionCancel = false;
 let unitsById = {}; // { unitId: { unit_number, drivers: [...] } }
 
 // ----- PANEL AMPLIADO (mapa + conductores + alertas, como el del dueño) -----
@@ -98,12 +86,14 @@ function unlock(checador) {
   mainScreen.classList.remove('hidden');
   mainScreen.classList.add('md:flex');
   checadorNameText.textContent = checador.name;
-  setupUbicacion();
   loadUnits();
   initRealtime();
 
-  // Panel ampliado: mapa + conductores + alertas (mismo que ve el dueño)
-  if (!mapInitialized) initMap();
+  // Panel ampliado: conductores + alertas (mismo que ve el dueño).
+  // El mapa incrustado solo se usa en celular; en escritorio "Mapa" abre
+  // mapa-vivo.html en una pestaña aparte, así que ahí no hace falta cargarlo.
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+  if (!isDesktop && !mapInitialized) initMap();
   initFleetRealtimeListeners();
 
   if (window.lucide) lucide.createIcons();
@@ -136,48 +126,6 @@ on(backToPinBtn, 'click', goToPinScreen);
 on(switchChecadorBtn, 'click', goToPinScreen, 'switchChecadorBtn - opcional, normal que no exista');
 on(document.getElementById('logoutBtnDesktop'), 'click', goToPinScreen, 'logoutBtnDesktop');
 on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logoutBtnMobileNav');
-
-// ----- UBICACIÓN (texto libre, con memoria en este dispositivo) -----
-function setupUbicacion() {
-  const saved = localStorage.getItem('rss_checador_ubicacion');
-  if (saved) {
-    currentUbicacion = saved;
-    ubicacionText.textContent = currentUbicacion;
-    allowUbicacionCancel = true;
-  } else {
-    openUbicacionOverlay(true);
-  }
-}
-
-function openUbicacionOverlay(isFirstTime) {
-  allowUbicacionCancel = !isFirstTime;
-  ubicacionTitle.textContent = isFirstTime ? '¿Dónde estás hoy?' : 'Cambiar ubicación';
-  ubicacionCancelBtn.classList.toggle('hidden', isFirstTime);
-  ubicacionInput.value = isFirstTime ? '' : (currentUbicacion || '');
-  ubicacionOverlay.classList.add('show');
-  setTimeout(() => ubicacionInput.focus(), 50);
-}
-
-function closeUbicacionOverlay() {
-  ubicacionOverlay.classList.remove('show');
-}
-
-on(ubicacionChip, 'click', () => openUbicacionOverlay(false));
-on(ubicacionCancelBtn, 'click', () => {
-  if (allowUbicacionCancel) closeUbicacionOverlay();
-});
-on(ubicacionInput, 'keydown', (e) => { if (e.key === 'Enter') saveUbicacion(); });
-on(ubicacionSaveBtn, 'click', saveUbicacion);
-
-function saveUbicacion() {
-  const val = ubicacionInput.value.trim();
-  if (!val) return;
-  currentUbicacion = val;
-  localStorage.setItem('rss_checador_ubicacion', val);
-  ubicacionText.textContent = val;
-  allowUbicacionCancel = true;
-  closeUbicacionOverlay();
-}
 
 // ----- CARGAR UNIDADES (todos los conductores, de todos los dueños) -----
 async function loadUnits() {
@@ -276,28 +224,15 @@ function openUnitDriversOverlay(unitId) {
     </button>
   `).join('');
 
-  // Enganchar tap (registro normal) vs long-press (incidencia) en cada fila
+  // Tocar el nombre del conductor abre directo la hoja de incidencia
+  // (llegó tarde / no se presentó). Ya no hay registro de "pasó a tiempo".
   unitDriversList.querySelectorAll('.driver-row').forEach((row) => {
     const driverData = unit.drivers[Number(row.dataset.driverIdx)];
-    row.addEventListener('pointerdown', () => {
-      longPressFired = false;
-      longPressTimer = setTimeout(() => {
-        longPressFired = true;
-        if (navigator.vibrate) navigator.vibrate([15, 40, 15]);
-        closeUnitDriversOverlay();
-        openIncidentOverlay(driverData);
-      }, 500);
+    row.addEventListener('click', () => {
+      if (navigator.vibrate) navigator.vibrate(15);
+      closeUnitDriversOverlay();
+      openIncidentOverlay(driverData);
     });
-    const cancelPress = () => clearTimeout(longPressTimer);
-    row.addEventListener('pointerup', () => {
-      clearTimeout(longPressTimer);
-      if (!longPressFired) {
-        closeUnitDriversOverlay();
-        registerCheckpoint(driverData, 'a_tiempo');
-      }
-    });
-    row.addEventListener('pointerleave', cancelPress);
-    row.addEventListener('pointercancel', cancelPress);
   });
 
   unitDriversOverlay.classList.add('show');
@@ -331,22 +266,18 @@ async function registerCheckpoint(driverData, status) {
       unit_id: unitId,
       owner_id: ownerId,
       route: route || null,
-      ubicacion: currentUbicacion,
       status,
     });
 
   if (error) {
     console.error('Error guardando checador_events:', error);
-    showToast(`No se pudo registrar la unidad ${unitNumber}. Intenta de nuevo.`, 'error');
+    showToast(`No se pudo registrar la incidencia de la unidad ${unitNumber}. Intenta de nuevo.`, 'error');
     return;
   }
 
   const time = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-  const rLabel = routeLabel(route);
 
-  if (status === 'a_tiempo') {
-    showToast(`Unidad ${unitNumber} — ${driverName} — ${rLabel} — ${time}`, 'ok');
-  } else if (status === 'retraso') {
+  if (status === 'retraso') {
     showToast(`Unidad ${unitNumber} — ${driverName} — Llegó tarde — ${time}`, 'warn');
   } else if (status === 'no_se_presento') {
     showToast(`Unidad ${unitNumber} — ${driverName} — No se presentó — ${time}`, 'warn');
@@ -916,7 +847,8 @@ document.querySelectorAll('#mobileNavPanel a.mobile-nav-item').forEach((a) => {
 });
 
 // ----- NAVEGACIÓN: marcar el enlace activo según la sección visible -----
-const navLinks = Array.from(document.querySelectorAll('aside .nav-item, #mobileNavPanel .mobile-nav-item'));
+const navLinks = Array.from(document.querySelectorAll('aside .nav-item, #mobileNavPanel .mobile-nav-item'))
+  .filter((a) => a.getAttribute('href').startsWith('#'));
 if (navLinks.length) {
   const sectionIds = [...new Set(navLinks.map((a) => a.getAttribute('href').slice(1)))];
   const sections = sectionIds.map((id) => document.getElementById(id)).filter(Boolean);
@@ -933,18 +865,7 @@ if (navLinks.length) {
   sections.forEach((sec) => navObserver.observe(sec));
 }
 
-// ----- RESUMEN DEL DÍA -> PDF DESCARGABLE -----
-const STATUS_LABEL = {
-  a_tiempo: 'A tiempo',
-  retraso: 'Llegó tarde',
-  no_se_presento: 'No se presentó',
-};
-const STATUS_COLOR = {
-  a_tiempo: [30, 158, 90],     // verde (agave)
-  retraso: [245, 144, 12],     // naranja (cempasúchil)
-  no_se_presento: [225, 72, 58], // rojo (alerta)
-};
-
+// ----- VUELTAS DEL DÍA -> PDF DESCARGABLE -----
 on(sendSummaryBtn, 'click', downloadDaySummaryPdf);
 
 // Espera hasta `timeoutMs` a que window.jspdf esté disponible, revisando cada 250ms.
@@ -985,34 +906,31 @@ async function downloadDaySummaryPdf() {
   sendSummaryBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4"></i> Armando PDF…';
   if (window.lucide) lucide.createIcons();
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const todayLabel = now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const todayFile = now.toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const { data: events, error } = await supabase
-    .from('checador_events')
-    .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number )')
-    .eq('checador_id', currentChecador.id)
-    .gte('created_at', startOfDay.toISOString())
-    .order('created_at', { ascending: true });
+  // ----- VUELTAS POR CONDUCTOR (asignadas por el checador, hoy) — lo único que va en el PDF -----
+  const { data: vueltasRows, error: vueltasError } = await supabase
+    .from('driver_vueltas')
+    .select('vueltas, driver:driver_id ( name, unit:unit_id ( unit_number ) )')
+    .eq('date', todayFile)
+    .order('vueltas', { ascending: false });
 
   sendSummaryBtn.disabled = false;
   sendSummaryBtn.innerHTML = originalHtml;
   if (window.lucide) lucide.createIcons();
 
-  if (error) {
-    console.error('Error armando el resumen del día:', error);
+  if (vueltasError) {
+    console.error('Error cargando vueltas para el PDF:', vueltasError);
     showToast('No se pudo armar el resumen. Intenta de nuevo.', 'error');
     return;
   }
 
-  if (!events || events.length === 0) {
-    showToast('Todavía no tienes registros hoy para descargar.', 'warn');
+  if (!vueltasRows || vueltasRows.length === 0) {
+    showToast('Todavía no hay vueltas registradas hoy para descargar.', 'warn');
     return;
   }
-
-  const now = new Date();
-  const todayLabel = now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const todayFile = now.toISOString().slice(0, 10); // YYYY-MM-DD
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -1020,7 +938,7 @@ async function downloadDaySummaryPdf() {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
   doc.setTextColor(14, 128, 190); // azul talavera
-  doc.text('Resumen del día · Ruta San Simón (R-18)', 14, 18);
+  doc.text('Vueltas del día · Ruta San Simón (R-18)', 14, 18);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
@@ -1028,81 +946,27 @@ async function downloadDaySummaryPdf() {
   doc.text(`Checador: ${currentChecador.name}`, 14, 26);
   doc.text(`Fecha: ${todayLabel}`, 14, 32);
 
-  const rows = events.map((ev) => {
-    const time = ev.created_at
-      ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-      : '--:--';
-    const unitNum = ev.unit?.unit_number != null ? ev.unit.unit_number : '?';
-    const driverName = ev.driver?.name || 'Conductor';
-    const lugar = ev.ubicacion || '—';
-    const statusText = STATUS_LABEL[ev.status] || ev.status || '—';
-    return [time, `Unidad ${unitNum}`, driverName, lugar, statusText];
-  });
+  const vueltasBody = vueltasRows.map((v) => [
+    v.driver?.unit?.unit_number != null ? `Unidad ${v.driver.unit.unit_number}` : 'Unidad —',
+    v.driver?.name || 'Conductor',
+    String(v.vueltas ?? 0),
+  ]);
+  const vueltasTotal = vueltasRows.reduce((sum, v) => sum + (v.vueltas || 0), 0);
 
   doc.autoTable({
-    head: [['Hora', 'Unidad', 'Conductor', 'Ubicación', 'Estatus']],
-    body: rows,
+    head: [['Unidad', 'Conductor', 'Vueltas']],
+    body: vueltasBody,
     startY: 38,
     styles: { font: 'helvetica', fontSize: 10, cellPadding: 3 },
-    headStyles: { fillColor: [14, 128, 190], textColor: 255, fontStyle: 'bold' },
+    headStyles: { fillColor: [30, 158, 90], textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [244, 238, 220] },
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.column.index === 4) {
-        const ev = events[data.row.index];
-        const color = STATUS_COLOR[ev.status];
-        if (color) {
-          data.cell.styles.textColor = color;
-          data.cell.styles.fontStyle = 'bold';
-        }
-      }
-    },
+    columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
   });
 
   const finalY = doc.lastAutoTable.finalY || 38;
   doc.setFontSize(10);
   doc.setTextColor(90, 82, 68);
-  doc.text(`Total: ${events.length} registros`, 14, finalY + 8);
+  doc.text(`Total de vueltas hoy (todos los conductores): ${vueltasTotal}`, 14, finalY + 8);
 
-  // ----- TABLA DE VUELTAS POR CONDUCTOR (asignadas por el checador, hoy) -----
-  const { data: vueltasRows, error: vueltasError } = await supabase
-    .from('driver_vueltas')
-    .select('vueltas, driver:driver_id ( name, unit:unit_id ( unit_number ) )')
-    .eq('date', todayFile)
-    .order('vueltas', { ascending: false });
-
-  if (vueltasError) {
-    console.error('Error cargando vueltas para el PDF:', vueltasError);
-  } else if (vueltasRows && vueltasRows.length > 0) {
-    const vueltasBody = vueltasRows.map((v) => [
-      v.driver?.unit?.unit_number != null ? `Unidad ${v.driver.unit.unit_number}` : 'Unidad —',
-      v.driver?.name || 'Conductor',
-      String(v.vueltas ?? 0),
-    ]);
-    const vueltasTotal = vueltasRows.reduce((sum, v) => sum + (v.vueltas || 0), 0);
-
-    let vy = (doc.lastAutoTable.finalY || finalY) + 16;
-    if (vy > 260) { doc.addPage(); vy = 18; }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(14, 128, 190);
-    doc.text('Vueltas por conductor · hoy', 14, vy);
-
-    doc.autoTable({
-      head: [['Unidad', 'Conductor', 'Vueltas']],
-      body: vueltasBody,
-      startY: vy + 4,
-      styles: { font: 'helvetica', fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [30, 158, 90], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [244, 238, 220] },
-      columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
-    });
-
-    const vFinalY = doc.lastAutoTable.finalY || (vy + 4);
-    doc.setFontSize(10);
-    doc.setTextColor(90, 82, 68);
-    doc.text(`Total de vueltas hoy (todos los conductores): ${vueltasTotal}`, 14, vFinalY + 8);
-  }
-
-  doc.save(`resumen-checador-${todayFile}.pdf`);
+  doc.save(`vueltas-checador-${todayFile}.pdf`);
 }

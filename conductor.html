@@ -154,6 +154,12 @@
   .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#1b1002; box-shadow:var(--shadow); }
   .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#052414; box-shadow:var(--shadow); }
 
+  /* Botón de turno: azul = "toca para iniciar", verde = "en turno, toca para terminar" */
+  #turnoBtn.on{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%) !important; color:#052414 !important; }
+
+  /* Botón de reposo: mientras está activo se ve apagado/gris con el conteo, y sigue siendo tocable para cancelar antes de tiempo */
+  #reposoBtn.active{ background:var(--surface-2) !important; color:var(--ink-soft) !important; border:1.5px dashed var(--border); }
+
   #pinInput{ letter-spacing:.15em; }
 
   ::-webkit-scrollbar{ width:8px; height:8px; }
@@ -190,84 +196,125 @@
 </div>
 
 <!-- PANEL PRINCIPAL -->
-<div id="mainScreen" class="hidden min-h-screen flex flex-col items-center px-6 py-8 pb-28">
-  <header class="text-center mb-6 w-full max-w-sm flex items-center justify-between gap-2">
-    <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i>
-    </button>
-    <div class="text-left flex-1 min-w-0">
-      <h1 class="font-display font-semibold text-xl truncate">Panel del Conductor</h1>
-      <p class="text-sm truncate" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+<div id="mainScreen" class="hidden min-h-screen flex flex-col items-center pb-28">
+
+  <!-- Barra superior FIJA (sticky): siempre visible aunque hagan scroll,
+       muestra el nombre real del chofer en vez de un título genérico. -->
+  <header class="sticky top-0 z-40 w-full flex justify-center px-6 pt-[env(safe-area-inset-top)]" style="background:color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); border-bottom:1px solid var(--border-soft);">
+    <div class="w-full max-w-3xl flex items-center justify-between gap-2 py-3">
+      <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </button>
+      <div class="text-left flex-1 min-w-0">
+        <p class="text-[11px] uppercase tracking-wide truncate" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
+        <h1 id="headerDriverName" class="font-display font-bold text-lg truncate leading-tight">Panel del Conductor</h1>
+      </div>
+      <span id="headerShiftDot" class="hidden w-2.5 h-2.5 rounded-full shrink-0" style="background:var(--agave); box-shadow:0 0 0 3px var(--agave-glow);"></span>
+      <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
+      </button>
+      <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
+        <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+        <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+      </button>
     </div>
-    <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3.5 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
-      <i data-lucide="download" class="w-3.5 h-3.5"></i> Instalar
-    </button>
-    <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
-      <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
-      <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
-    </button>
   </header>
 
-  <div class="placard px-4 py-4 mb-6 w-full max-w-sm">
-    <div class="flex items-center gap-2 mb-2.5">
-      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="user" class="w-4 h-4"></i></span>
-      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Mi nombre</span>
+  <div class="w-full flex flex-col items-center px-6 pt-6 md:pt-8">
+
+  <!-- Tarjetas: en celular van una debajo de otra; en pantallas anchas (compu/tablet)
+       se acomodan en 2 columnas para aprovechar el espacio. -->
+  <div class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+
+    <div class="placard px-4 py-4">
+      <div class="flex items-center gap-2 mb-2.5">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="user" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Mi nombre</span>
+      </div>
+      <input id="driverNameInput" type="text" maxlength="30" placeholder="Tu nombre"
+             class="w-full px-3.5 py-2.5 rounded-xl border font-display font-semibold"
+             style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
+      <p id="nameSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Nombre guardado. Ya se ve así en el panel del dueño.</p>
     </div>
-    <input id="driverNameInput" type="text" maxlength="30" placeholder="Tu nombre"
-           class="w-full px-3.5 py-2.5 rounded-xl border font-display font-semibold"
-           style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
-    <p id="nameSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Nombre guardado. Ya se ve así en el panel del dueño.</p>
-  </div>
 
-  <div class="placard px-4 py-4 mb-8 w-full max-w-sm">
-    <div class="flex items-center gap-2 mb-2.5">
-      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--cempasuchil) 16%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="route" class="w-4 h-4"></i></span>
-      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Tu ramal hoy</span>
+    <div class="placard px-4 py-4">
+      <div class="flex items-center gap-2 mb-2.5">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--cempasuchil) 16%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="route" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Tu ramal hoy</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button class="ramal-btn" data-route="capilla">Por Capilla</button>
+        <button class="ramal-btn" data-route="secundaria">Por Secundaria</button>
+      </div>
+      <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Esto le avisa al dueño (y a los pasajeros) por cuál ramal vas.</p>
     </div>
-    <div class="grid grid-cols-2 gap-2.5">
-      <button class="ramal-btn" data-route="capilla">Por Capilla</button>
-      <button class="ramal-btn" data-route="secundaria">Por Secundaria</button>
+
+    <!-- NUEVO: Iniciar / Terminar turno. Un solo botón que cambia de texto
+         y color según el estado — no prende ni apaga la ubicación, es aparte. -->
+    <div class="placard px-4 py-4">
+      <div class="flex items-center gap-2 mb-2.5">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="clock" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Tu turno</span>
+      </div>
+      <button id="turnoBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Iniciar mi turno</button>
+      <p id="turnoStatusText" class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Marca cuando empiezas y cuando terminas tu jornada.</p>
     </div>
-    <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Esto le avisa al dueño (y a los pasajeros) por cuál ramal vas.</p>
-  </div>
 
-  <div class="placard px-4 py-4 mb-6 w-full max-w-sm">
-    <div class="flex items-center gap-2 mb-2.5">
-      <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--surface)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
-      <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reportar parada</span>
+    <!-- NUEVO: Reposo de 15 min. Solo es un aviso para el dueño/checador,
+         se quita solo pasados los 15 minutos. No afecta la ubicación. -->
+    <div class="placard px-4 py-4">
+      <div class="flex items-center gap-2 mb-2.5">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--cempasuchil) 16%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="coffee" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reposo</span>
+      </div>
+      <button id="reposoBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">Marcar 15 min de reposo</button>
+      <p id="reposoStatusText" class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Le avisa al dueño y al checador que estás parado descansando. Se quita solo. Los pasajeros no lo ven.</p>
     </div>
-    <button id="checkpointBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">Salí de base San Simón</button>
-    <p id="checkpointSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. Los pasajeros ya lo ven.</p>
-    <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Presiona cuando salgas o llegues. Esto NO comparte tu ubicación exacta, solo avisa la hora.</p>
+
+    <div class="placard px-4 py-4 md:col-span-2">
+      <div class="flex items-center gap-2 mb-2.5">
+        <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--surface)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
+        <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reportar parada</span>
+      </div>
+      <button id="checkpointBtn" class="btn-lift w-full py-3.5 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">Salí de base San Simón</button>
+      <p id="checkpointSavedText" class="text-xs mt-2.5 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. Los pasajeros ya lo ven.</p>
+      <p class="text-[11px] mt-2.5" style="color:var(--ink-soft);">Presiona cuando salgas o llegues. Esto NO comparte tu ubicación exacta, solo avisa la hora.</p>
+    </div>
+
   </div>
 
-  <button id="toggleBtn">
-    <span class="pulseDot"><i id="toggleDotIcon" data-lucide="power"></i></span>
-    <span id="toggleLabel" class="text-sm">Encender<br>ubicación</span>
-  </button>
+  <!-- Botón grande de ubicación: se queda centrado y del mismo tamaño en
+       celular y compu, es la acción principal de la pantalla. -->
+  <div class="w-full max-w-3xl flex flex-col items-center mt-8 md:mt-10">
+    <button id="toggleBtn">
+      <span class="pulseDot"><i id="toggleDotIcon" data-lucide="power"></i></span>
+      <span id="toggleLabel" class="text-sm">Encender<br>ubicación</span>
+    </button>
 
-  <p id="statusText" class="text-sm mt-6 text-center max-w-xs" style="color:var(--ink-soft);">
-    Presiona el botón para que los pasajeros vean tu combi en tiempo real en el mapa.
-  </p>
+    <p id="statusText" class="text-sm mt-6 text-center max-w-xs" style="color:var(--ink-soft);">
+      Presiona el botón para que los pasajeros vean tu combi en tiempo real en el mapa.
+    </p>
 
-  <div id="supabaseWarning" class="hidden placard p-4 mt-6 max-w-sm text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
-    Supabase no está configurado todavía. Revisa tu archivo de configuración.
+    <div id="supabaseWarning" class="hidden placard p-4 mt-6 max-w-sm text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
+      Supabase no está configurado todavía. Revisa tu archivo de configuración.
+    </div>
+
+    <div class="placard p-4 mt-8 w-full max-w-sm text-xs font-mono" style="color:var(--ink-soft);">
+      <p>Última posición enviada:</p>
+      <p id="coordsText" class="mt-1">—</p>
+      <p id="updatedText" class="mt-1">—</p>
+    </div>
+
+    <p class="text-[12px] mt-6 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
+      <i data-lucide="lightbulb" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
+      <span>Deja la pantalla encendida y el navegador abierto mientras manejas la ruta. Si cierras esta página o pierdes conexión, tu ubicación se apaga sola para los pasajeros.</span>
+    </p>
+    <p class="text-[12px] mt-3 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
+      <i data-lucide="siren" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
+      <span>¿Asalto, accidente u otra emergencia? Usa el botón rojo de abajo a la derecha para avisarle al dueño de inmediato, con tu ubicación.</span>
+    </p>
   </div>
-
-  <div class="placard p-4 mt-8 w-full max-w-sm text-xs font-mono" style="color:var(--ink-soft);">
-    <p>Última posición enviada:</p>
-    <p id="coordsText" class="mt-1">—</p>
-    <p id="updatedText" class="mt-1">—</p>
   </div>
-
-  <p class="text-[12px] mt-6 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
-    <i data-lucide="lightbulb" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
-    <span>Deja la pantalla encendida y el navegador abierto mientras manejas la ruta. Si cierras esta página o pierdes conexión, tu ubicación se apaga sola para los pasajeros.</span>
-  </p>
-  <p class="text-[12px] mt-3 text-center max-w-sm flex items-start gap-1.5 justify-center" style="color:var(--ink-soft); opacity:.85;">
-    <i data-lucide="siren" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
-    <span>¿Asalto, accidente u otra emergencia? Usa el botón rojo de abajo a la derecha para avisarle al dueño de inmediato, con tu ubicación.</span>
-  </p>
 </div>
 
 <button id="panicBtn" aria-label="Botón de ayuda"><i data-lucide="siren" class="w-6 h-6"></i></button>
@@ -314,12 +361,5 @@
     });
   });
 </script>
-
-<!-- Audio silencioso en loop: evita que el navegador congele la pestaña
-     en segundo plano mientras se comparte ubicación (solo ruta navegador,
-     la ruta nativa con BackgroundGeolocation no lo necesita). -->
-<audio id="keepAliveAudio" loop playsinline style="display:none">
-  <source src="data:audio/wav;base64,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" type="audio/wav">
-</audio>
 </body>
 </html>

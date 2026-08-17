@@ -6,25 +6,36 @@
       notificación del sistema, aunque la pestaña/app esté cerrada y el
       celular bloqueado o en reposo. */
 
-const CACHE_NAME = 'ruta-san-simon-v9';
+const CACHE_NAME = 'ruta-san-simon-v10';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
   './manifest-conductor.json',
   './manifest-dueno.json',
-  './icon-192.png',
+  './icon-1922.png', // ojo: el archivo real se llama así (con el "2" extra), no icon-192.png
   './icon-512.png',
-  './firebase-config.js',
   './conductor.html',
   './dueno.html',
+  // './firebase-config.js', -> quitado: ese archivo no existe en el repo y
+  // hacía que cache.addAll() fallara completo, dejando el Service Worker
+  // en estado "redundant" (nunca se activaba, nunca llegaban los pushes).
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      // Cacheamos uno por uno en vez de cache.addAll(): si algún día falta
+      // un archivo de la lista, ya no tumba la instalación completa del
+      // Service Worker — solo se salta ese archivo y sigue con los demás.
+      return Promise.all(
+        APP_SHELL.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn('[sw] No se pudo cachear (se ignora y se sigue):', url, err);
+          })
+        )
+      );
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -79,8 +90,6 @@ self.addEventListener('fetch', (event) => {
    NOTIFICACIONES PUSH REALES
    Llegan como notificación del sistema operativo aunque la
    pestaña/app esté cerrada o el celular esté bloqueado/suspendido.
-   (Requiere el resto de la infraestructura de push-notifications.js,
-   push_subscriptions.sql y la Edge Function send-alert-push.)
    ============================================================ */
 
 self.addEventListener('push', (event) => {
@@ -94,11 +103,11 @@ self.addEventListener('push', (event) => {
   const title = data.title || '🚨 Alerta · Ruta San Simón';
   const options = {
     body: data.body || 'Toca para ver los detalles en el panel.',
-    icon: data.icon || 'icon-192.png',
-    badge: data.badge || 'icon-192.png',
+    icon: data.icon || 'icon-1922.png',
+    badge: data.badge || 'icon-1922.png',
     tag: data.tag || 'rss-alert',
-    renotify: true, // si llega otra alerta con el mismo tag, vuelve a vibrar/sonar
-    requireInteraction: true, // NO se cierra sola: se queda hasta que la toquen
+    renotify: true,
+    requireInteraction: true,
     vibrate: data.vibrate || [300, 100, 300, 100, 300, 100, 600],
     silent: false,
     data: { url: data.url || 'dueno.html', ...(data.data || {}) },

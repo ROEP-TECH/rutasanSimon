@@ -427,7 +427,7 @@
     display: none;
   }
 
-  /* ===== NUEVO: ESTILOS DEL SALUDO PERSONALIZADO ===== */
+  /* ===== MODAL DE SALUDO (bienvenida) ===== */
   #welcomeOverlay {
     position: fixed;
     inset: 0;
@@ -522,6 +522,132 @@
     border-color: var(--talavera);
     color: var(--ink);
   }
+
+  /* ===== NUEVO: MODAL DE ACTUALIZACIÓN (VERSIONES) ===== */
+  #updateOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 110; /* Por encima del saludo */
+    background: rgba(5,7,10,0.75);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  #updateOverlay.show {
+    display: flex;
+  }
+  #updateCard {
+    max-width: 26rem;
+    width: 100%;
+    background: var(--surface);
+    border-radius: 2rem;
+    padding: 2rem 1.5rem;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    text-align: center;
+    animation: welcomePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #updateCard .update-icon {
+    width: 72px;
+    height: 72px;
+    background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    color: #1b1002;
+    box-shadow: 0 8px 24px -8px var(--cempasuchil-glow);
+  }
+  #updateCard .update-icon svg {
+    width: 36px;
+    height: 36px;
+  }
+  #updateCard h2 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 0.25rem;
+    color: var(--ink);
+  }
+  #updateCard .update-version {
+    display: inline-block;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 2rem;
+    padding: 0.2rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    margin-bottom: 0.75rem;
+  }
+  #updateCard .update-changelog {
+    text-align: left;
+    background: var(--surface-2);
+    border-radius: 1rem;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0 1.5rem;
+    border: 1px solid var(--border-soft);
+  }
+  #updateCard .update-changelog ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  #updateCard .update-changelog li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  #updateCard .update-changelog li:last-child {
+    border-bottom: none;
+  }
+  #updateCard .update-changelog li i {
+    margin-top: 0.15rem;
+    color: var(--agave);
+  }
+  .update-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+  .update-actions button {
+    padding: 0.7rem 1.8rem;
+    border-radius: 2rem;
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .update-actions button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .update-actions .btn-update {
+    background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
+    border-color: var(--agave-dark);
+    color: #052414;
+  }
+  .update-actions .btn-update:hover {
+    box-shadow: 0 8px 24px -8px var(--agave-glow);
+  }
+  .update-actions .btn-skip {
+    background: transparent;
+    color: var(--ink-soft);
+  }
+  .update-actions .btn-skip:hover {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--ink);
+  }
 </style>
 </head>
 <body class="font-body bg-grid">
@@ -537,7 +663,7 @@
       <i data-lucide="bus"></i>
     </div>
     <h1 class="font-display font-semibold text-xl">Panel del Conductor</h1>
-    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18 (V 1.0)</p>
+    <p class="text-sm mt-1" style="color:var(--ink-soft);">Ruta San Simón · R-18</p>
     <p class="text-xs mt-4" style="color:var(--ink-soft);">Entra con tu PIN personal</p>
     <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN"
            class="mt-2 w-full text-center text-2xl font-mono py-3 rounded-2xl border"
@@ -711,7 +837,7 @@
   </div>
 </div>
 
-<!-- ===== NUEVO: OVERLAY DE SALUDO PERSONALIZADO ===== -->
+<!-- ===== MODAL DE SALUDO ===== -->
 <div id="welcomeOverlay">
   <div id="welcomeCard">
     <div class="welcome-icon">
@@ -724,31 +850,128 @@
   </div>
 </div>
 
-<script>
-  // ===== LÓGICA DE AVATAR PERSONALIZADO =====
+<!-- ===== NUEVO: MODAL DE ACTUALIZACIÓN (VERSIONES) ===== -->
+<div id="updateOverlay">
+  <div id="updateCard">
+    <div class="update-icon">
+      <i data-lucide="git-pull-request" class="w-9 h-9"></i>
+    </div>
+    <h2>¡Nueva versión disponible!</h2>
+    <span class="update-version" id="updateVersionDisplay">v1.0</span>
+    <div class="update-changelog" id="updateChangelog">
+      <ul>
+        <!-- Los items se generan desde JS -->
+      </ul>
+    </div>
+    <div class="update-actions">
+      <button class="btn-skip" id="skipUpdateBtn">Omitir</button>
+      <button class="btn-update" id="applyUpdateBtn">Actualizar ahora</button>
+    </div>
+  </div>
+</div>
 
+<script>
+  // ============================================================
+  // ===== NUEVO: SISTEMA DE VERSIONES (v1.0) =====
+  // ============================================================
   (function() {
-    // Elementos principales
+    // --- Configuración de la versión actual ---
+    const APP_VERSION = '1.0'; // Cambia esto en cada nueva versión
+    const CHANGELOG = [
+      '✨ Nuevo saludo personalizado al iniciar sesión.',
+      '🖼️ Avatar personalizable con foto de perfil.',
+      '🚌 Mejoras en la interfaz y animaciones.',
+      '🐛 Corrección de errores menores.'
+    ];
+
+    // --- Elementos DOM ---
+    const updateOverlay = document.getElementById('updateOverlay');
+    const updateVersionDisplay = document.getElementById('updateVersionDisplay');
+    const updateChangelog = document.getElementById('updateChangelog');
+    const applyBtn = document.getElementById('applyUpdateBtn');
+    const skipBtn = document.getElementById('skipUpdateBtn');
+
+    // --- Función para mostrar el modal de actualización ---
+    function showUpdateModal() {
+      // Llenar la versión
+      updateVersionDisplay.textContent = `v${APP_VERSION}`;
+
+      // Llenar el changelog
+      const list = updateChangelog.querySelector('ul');
+      list.innerHTML = '';
+      CHANGELOG.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i> ${item}`;
+        list.appendChild(li);
+      });
+
+      // Renderizar íconos de Lucide (si ya está cargado)
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+
+      // Mostrar el overlay
+      updateOverlay.classList.add('show');
+    }
+
+    // --- Función para aplicar la actualización ---
+    function applyUpdate() {
+      // Guardar la nueva versión en localStorage
+      localStorage.setItem('app_version', APP_VERSION);
+      // Forzar recarga (limpia caché y obtiene la nueva versión)
+      window.location.reload(true);
+    }
+
+    // --- Función para omitir (cierra el modal) ---
+    function skipUpdate() {
+      updateOverlay.classList.remove('show');
+      // Guardar la versión actual para no molestar en esta sesión
+      localStorage.setItem('app_version', APP_VERSION);
+    }
+
+    // --- Detectar si hay nueva versión ---
+    function checkVersion() {
+      const savedVersion = localStorage.getItem('app_version');
+      // Si no hay versión guardada o la versión guardada es diferente a la actual
+      if (savedVersion !== APP_VERSION) {
+        showUpdateModal();
+      }
+    }
+
+    // --- Eventos ---
+    applyBtn.addEventListener('click', applyUpdate);
+    skipBtn.addEventListener('click', skipUpdate);
+
+    // También cerrar si el usuario hace clic fuera del modal (solo si está visible)
+    updateOverlay.addEventListener('click', function(e) {
+      if (e.target === updateOverlay) {
+        skipUpdate();
+      }
+    });
+
+    // --- Ejecutar la comprobación al cargar ---
+    // Esperar un momento para que los demás scripts carguen y Lucide esté listo
+    setTimeout(checkVersion, 300);
+  })();
+
+
+  // ============================================================
+  // ===== LÓGICA DE AVATAR PERSONALIZADO =====
+  // ============================================================
+  (function() {
     const avatarWrapper = document.getElementById('avatarWrapper');
     const avatarImg = document.getElementById('driverAvatar');
     const avatarDefault = document.getElementById('avatarDefaultIcon');
-
-    // Modales
     const profileModal = document.getElementById('profileModalOverlay');
     const confirmModal = document.getElementById('confirmModalOverlay');
-
-    // Vista previa en el modal de perfil
     const profilePreviewImg = document.getElementById('profilePreviewImg');
     const profilePreviewDefault = document.getElementById('profilePreviewDefault');
-
-    // Botones
     const closeProfileBtn = document.getElementById('closeProfileModalBtn');
     const deleteAvatarBtn = document.getElementById('deleteAvatarBtn');
     const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
     const confirmCancelBtn = document.getElementById('confirmCancelBtn');
     const fileInput = document.getElementById('avatarFileInput');
 
-    // ===== Cargar avatar guardado =====
     function loadAvatar() {
       const stored = localStorage.getItem('driver_avatar');
       if (stored && stored.startsWith('data:image')) {
@@ -766,7 +989,6 @@
       }
     }
 
-    // ===== Guardar avatar (base64) =====
     function saveAvatar(dataUrl) {
       if (dataUrl && dataUrl.startsWith('data:image')) {
         localStorage.setItem('driver_avatar', dataUrl);
@@ -785,7 +1007,6 @@
       }
     }
 
-    // ===== Abrir modal de perfil =====
     function openProfileModal() {
       const stored = localStorage.getItem('driver_avatar');
       if (stored && stored.startsWith('data:image')) {
@@ -799,35 +1020,24 @@
       profileModal.classList.add('show');
     }
 
-    function closeProfileModal() {
-      profileModal.classList.remove('show');
-    }
+    function closeProfileModal() { profileModal.classList.remove('show'); }
+    function openConfirmModal() { confirmModal.classList.add('show'); }
+    function closeConfirmModal() { confirmModal.classList.remove('show'); }
 
-    function openConfirmModal() {
-      confirmModal.classList.add('show');
-    }
-
-    function closeConfirmModal() {
-      confirmModal.classList.remove('show');
-    }
-
-    // ===== Eventos =====
     avatarWrapper.addEventListener('click', openProfileModal);
     closeProfileBtn.addEventListener('click', closeProfileModal);
     profileModal.addEventListener('click', function(e) {
       if (e.target === profileModal) closeProfileModal();
     });
 
-    // Subir imagen (desde galería o cámara)
     fileInput.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(ev) {
-        const dataUrl = ev.target.result;
-        saveAvatar(dataUrl);
+        saveAvatar(ev.target.result);
         closeProfileModal();
-        fileInput.value = ''; // limpiar
+        fileInput.value = '';
       };
       reader.readAsDataURL(file);
     });
@@ -848,12 +1058,13 @@
     });
 
     loadAvatar();
-
-    // Simulación de nombre (puede venir de la lógica real)
     document.getElementById('headerDriverName').textContent = 'Juan Pérez';
   })();
 
-  // ===== NUEVO: LÓGICA DEL SALUDO PERSONALIZADO =====
+
+  // ============================================================
+  // ===== LÓGICA DEL SALUDO PERSONALIZADO =====
+  // ============================================================
   (function() {
     const mainScreen = document.getElementById('mainScreen');
     const welcomeOverlay = document.getElementById('welcomeOverlay');
@@ -862,22 +1073,17 @@
     let welcomeTimeout = null;
     let isWelcomeShown = false;
 
-    // Función para mostrar el saludo
     function showWelcome() {
       if (isWelcomeShown) return;
-      // Tomar el nombre del conductor desde el header
       const nameEl = document.getElementById('headerDriverName');
       let nombre = nameEl ? nameEl.textContent.trim() : 'Conductor';
-      // Si el nombre es "Panel del Conductor" (por defecto), lo reemplazamos
       if (nombre === 'Panel del Conductor') nombre = 'Conductor';
       welcomeName.textContent = nombre;
 
-      // Resetear animación
       welcomeOverlay.classList.remove('fade-out');
       welcomeOverlay.classList.add('show');
       isWelcomeShown = true;
 
-      // Auto-cerrar después de 2.5 segundos
       if (welcomeTimeout) clearTimeout(welcomeTimeout);
       welcomeTimeout = setTimeout(function() {
         closeWelcome();
@@ -897,36 +1103,31 @@
       }
     }
 
-    // Cerrar al hacer clic en el botón
     closeBtn.addEventListener('click', closeWelcome);
-
-    // Cerrar al hacer clic fuera de la tarjeta (en el overlay)
     welcomeOverlay.addEventListener('click', function(e) {
       if (e.target === welcomeOverlay) closeWelcome();
     });
 
-    // Observar cambios en la clase 'hidden' de mainScreen
     const observer = new MutationObserver(function(mutations) {
       mutations.forEach(function(mutation) {
         if (mutation.attributeName === 'class') {
-          // Si mainScreen ya no tiene la clase 'hidden' → se mostró
           if (!mainScreen.classList.contains('hidden')) {
-            // Mostrar saludo con un pequeño retraso para que la transición sea suave
             setTimeout(showWelcome, 300);
           }
         }
       });
     });
-
     observer.observe(mainScreen, { attributes: true });
 
-    // También ejecutar al inicio si por casualidad ya está visible (p.ej. si no se oculta)
     if (!mainScreen.classList.contains('hidden')) {
       setTimeout(showWelcome, 300);
     }
   })();
 
-  // ===== Toggles de tema =====
+
+  // ============================================================
+  // ===== TOGGLES DE TEMA =====
+  // ============================================================
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
@@ -934,116 +1135,6 @@
       try{ localStorage.setItem('rss_theme', next); }catch(e){}
     });
   });
-  // ===== SISTEMA DE ACTUALIZACIONES =====
-(function() {
-  const VERSION_ACTUAL = '1.1'; // Cámbiala cuando subas una nueva versión
-
-  function checkUpdate() {
-    fetch('version.json?t=' + Date.now()) // Evita caché
-      .then(res => {
-        if (!res.ok) throw new Error('No se pudo obtener la versión');
-        return res.json();
-      })
-      .then(data => {
-        if (data.version && data.version !== VERSION_ACTUAL) {
-          mostrarModalActualizacion(data);
-        }
-      })
-      .catch(err => {
-        // No mostrar error al usuario, solo silencioso
-        console.log('No se pudo verificar actualizaciones:', err);
-      });
-  }
-
-  function mostrarModalActualizacion(data) {
-    // Si ya hay un modal mostrado, no duplicar
-    if (document.getElementById('updateModalOverlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'updateModalOverlay';
-    overlay.style.cssText = `
-      position: fixed; inset: 0; z-index: 200;
-      background: rgba(5,7,10,0.75); backdrop-filter: blur(6px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 1.5rem; animation: fadeIn 0.3s ease;
-    `;
-
-    const card = document.createElement('div');
-    card.style.cssText = `
-      max-width: 22rem; width: 100%; background: var(--surface);
-      border-radius: 2rem; padding: 1.8rem 1.5rem;
-      border: 1px solid var(--border); box-shadow: var(--shadow-md);
-      text-align: center; animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    `;
-
-    card.innerHTML = `
-      <div style="font-size: 3rem; margin-bottom: 0.5rem;">🚀</div>
-      <h2 style="font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.3rem; margin-bottom: 0.25rem; color: var(--ink);">¡Nueva versión disponible!</h2>
-      <p style="color: var(--ink-soft); font-size: 0.95rem; margin-bottom: 1.5rem; line-height: 1.5;">
-        ${data.mensaje || 'Actualiza para disfrutar de las últimas mejoras.'}
-      </p>
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        <button id="updateNowBtn" style="
-          padding: 0.8rem; border-radius: 1rem; border: none;
-          background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
-          color: #052414; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1rem;
-          cursor: pointer; transition: all 0.2s;
-        ">Actualizar ahora</button>
-        <button id="updateLaterBtn" style="
-          background: transparent; border: none; color: var(--ink-soft);
-          font-family: 'Sora', sans-serif; font-weight: 400; font-size: 0.85rem;
-          cursor: pointer; transition: all 0.2s;
-        ">Recordármelo después</button>
-      </div>
-      <div style="margin-top: 1rem; font-size: 0.7rem; color: var(--ink-faint);">
-        Versión ${data.version} · ${data.fecha || ''}
-      </div>
-    `;
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    // Eventos
-    document.getElementById('updateNowBtn').addEventListener('click', function() {
-      // Forzar recarga limpia (sin caché)
-      window.location.reload(true);
-    });
-
-    document.getElementById('updateLaterBtn').addEventListener('click', function() {
-      overlay.remove();
-      // Guardar en localStorage para no molestar por 1 hora
-      localStorage.setItem('update_dismissed_until', Date.now() + 3600000);
-    });
-
-    // También cerrar si tocan fuera de la tarjeta
-    overlay.addEventListener('click', function(e) {
-      if (e.target === overlay) {
-        overlay.remove();
-        localStorage.setItem('update_dismissed_until', Date.now() + 3600000);
-      }
-    });
-  }
-
-  // ===== EJECUTAR =====
-  // Esperar 5 segundos después de cargar la página para no bloquear la experiencia
-  setTimeout(function() {
-    // Verificar si ya se descartó recientemente (menos de 1 hora)
-    const dismissed = localStorage.getItem('update_dismissed_until');
-    if (dismissed && parseInt(dismissed) > Date.now()) {
-      return; // No molestar
-    }
-    checkUpdate();
-  }, 5000);
-
-  // También revisar cada 10 minutos (para usuarios que mantienen la app abierta)
-  setInterval(function() {
-    const dismissed = localStorage.getItem('update_dismissed_until');
-    if (dismissed && parseInt(dismissed) > Date.now()) {
-      return;
-    }
-    checkUpdate();
-  }, 600000); // 10 minutos
-})();
 </script>
 </body>
 </html>

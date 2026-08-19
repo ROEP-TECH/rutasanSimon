@@ -121,6 +121,7 @@
         <h2 class="font-display font-semibold mb-3">Agregar dueño</h2>
         <div class="grid sm:grid-cols-2 gap-3">
           <input id="ownerFullName" class="field" placeholder="Nombre completo">
+          <input id="ownerPhone" class="field" placeholder="Teléfono" type="tel">
           <input id="ownerEmail" class="field" placeholder="Correo de acceso" type="email">
           <input id="ownerPassword" class="field" placeholder="Contraseña temporal" type="text">
           <select id="ownerRole" class="field">
@@ -131,7 +132,7 @@
         <button id="addOwnerBtn" class="btn btn-primary mt-3">Crear dueño</button>
       </div>
       <div class="card p-2 overflow-x-auto">
-        <table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th></th></tr></thead>
+        <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Rol</th><th></th></tr></thead>
         <tbody id="ownersTbody"></tbody></table>
       </div>
     </section>
@@ -142,6 +143,7 @@
         <h2 class="font-display font-semibold mb-3">Agregar conductor</h2>
         <div class="grid sm:grid-cols-2 gap-3">
           <input id="driverName" class="field" placeholder="Nombre">
+          <input id="driverPhone" class="field" placeholder="Teléfono" type="tel">
           <input id="driverPin" class="field" placeholder="PIN">
           <input id="driverRoute" class="field" placeholder="Ruta (texto libre, opcional)">
           <select id="driverUnit" class="field"><option value="">Sin unidad</option></select>
@@ -150,7 +152,7 @@
         <button id="addDriverBtn" class="btn btn-primary mt-3">Crear conductor</button>
       </div>
       <div class="card p-2 overflow-x-auto">
-        <table><thead><tr><th>Nombre</th><th>PIN</th><th>Unidad</th><th>Dueño</th><th>Activo</th><th></th></tr></thead>
+        <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>PIN</th><th>Unidad</th><th>Dueño</th><th>Activo</th><th></th></tr></thead>
         <tbody id="driversTbody"></tbody></table>
       </div>
     </section>
@@ -161,12 +163,13 @@
         <h2 class="font-display font-semibold mb-3">Agregar checador</h2>
         <div class="grid sm:grid-cols-2 gap-3">
           <input id="checadorName" class="field" placeholder="Nombre">
+          <input id="checadorPhone" class="field" placeholder="Teléfono" type="tel">
           <input id="checadorPin" class="field" placeholder="PIN">
         </div>
         <button id="addChecadorBtn" class="btn btn-primary mt-3">Crear checador</button>
       </div>
       <div class="card p-2 overflow-x-auto">
-        <table><thead><tr><th>Nombre</th><th>PIN</th><th></th></tr></thead>
+        <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>PIN</th><th></th></tr></thead>
         <tbody id="checadoresTbody"></tbody></table>
       </div>
     </section>
@@ -191,5 +194,3 @@
 
 </body>
 </html>
-
-

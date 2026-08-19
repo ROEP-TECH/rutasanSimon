@@ -426,6 +426,102 @@
   #avatarFileInput {
     display: none;
   }
+
+  /* ===== NUEVO: ESTILOS DEL SALUDO PERSONALIZADO ===== */
+  #welcomeOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(5,7,10,0.6);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: fadeIn 0.3s ease;
+  }
+  #welcomeOverlay.show {
+    display: flex;
+  }
+  #welcomeOverlay.fade-out {
+    animation: fadeOut 0.3s ease forwards;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  #welcomeCard {
+    max-width: 24rem;
+    width: 100%;
+    background: var(--surface);
+    border-radius: 2rem;
+    padding: 2rem 1.5rem;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    text-align: center;
+    animation: welcomePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center;
+  }
+  @keyframes welcomePop {
+    0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  #welcomeCard .welcome-icon {
+    width: 72px;
+    height: 72px;
+    background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    color: #052414;
+    box-shadow: 0 8px 24px -8px var(--agave-glow);
+  }
+  #welcomeCard .welcome-icon svg {
+    width: 36px;
+    height: 36px;
+  }
+  #welcomeCard h2 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+    color: var(--ink);
+  }
+  #welcomeCard p {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+  #welcomeCard .welcome-sub {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--border-soft);
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+  }
+  #welcomeCard .btn-close-welcome {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+    padding: 0.6rem 1.5rem;
+    border-radius: 2rem;
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #welcomeCard .btn-close-welcome:hover {
+    background: var(--surface-3);
+    border-color: var(--talavera);
+    color: var(--ink);
+  }
 </style>
 </head>
 <body class="font-body bg-grid">
@@ -591,7 +687,6 @@
       <i id="profilePreviewDefault" data-lucide="user" class="default-icon"></i>
     </div>
     <div class="profile-actions">
-      <!-- MODIFICACIÓN: input sin capture, solo accept="image/*" -->
       <label for="avatarFileInput" class="btn-lift">
         <i data-lucide="image" class="w-4 h-4"></i> Subir foto (galería o cámara)
       </label>
@@ -613,6 +708,19 @@
       <button id="confirmCancelBtn" class="btn-confirm-cancel">Cancelar</button>
       <button id="confirmDeleteBtn" class="btn-confirm-danger">Eliminar</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== NUEVO: OVERLAY DE SALUDO PERSONALIZADO ===== -->
+<div id="welcomeOverlay">
+  <div id="welcomeCard">
+    <div class="welcome-icon">
+      <i data-lucide="bus"></i>
+    </div>
+    <h2 id="welcomeGreeting">¡Buen día, <span id="welcomeName">Conductor</span>!</h2>
+    <p>Tu ruta está lista para comenzar.<br>¡Que tengas un excelente servicio!</p>
+    <button class="btn-close-welcome" id="closeWelcomeBtn">Continuar</button>
+    <div class="welcome-sub">Ruta San Simón · R-18</div>
   </div>
 </div>
 
@@ -741,8 +849,81 @@
 
     loadAvatar();
 
-    // Simulación de nombre
+    // Simulación de nombre (puede venir de la lógica real)
     document.getElementById('headerDriverName').textContent = 'Juan Pérez';
+  })();
+
+  // ===== NUEVO: LÓGICA DEL SALUDO PERSONALIZADO =====
+  (function() {
+    const mainScreen = document.getElementById('mainScreen');
+    const welcomeOverlay = document.getElementById('welcomeOverlay');
+    const welcomeName = document.getElementById('welcomeName');
+    const closeBtn = document.getElementById('closeWelcomeBtn');
+    let welcomeTimeout = null;
+    let isWelcomeShown = false;
+
+    // Función para mostrar el saludo
+    function showWelcome() {
+      if (isWelcomeShown) return;
+      // Tomar el nombre del conductor desde el header
+      const nameEl = document.getElementById('headerDriverName');
+      let nombre = nameEl ? nameEl.textContent.trim() : 'Conductor';
+      // Si el nombre es "Panel del Conductor" (por defecto), lo reemplazamos
+      if (nombre === 'Panel del Conductor') nombre = 'Conductor';
+      welcomeName.textContent = nombre;
+
+      // Resetear animación
+      welcomeOverlay.classList.remove('fade-out');
+      welcomeOverlay.classList.add('show');
+      isWelcomeShown = true;
+
+      // Auto-cerrar después de 2.5 segundos
+      if (welcomeTimeout) clearTimeout(welcomeTimeout);
+      welcomeTimeout = setTimeout(function() {
+        closeWelcome();
+      }, 2500);
+    }
+
+    function closeWelcome() {
+      if (!isWelcomeShown) return;
+      welcomeOverlay.classList.add('fade-out');
+      setTimeout(function() {
+        welcomeOverlay.classList.remove('show', 'fade-out');
+        isWelcomeShown = false;
+      }, 300);
+      if (welcomeTimeout) {
+        clearTimeout(welcomeTimeout);
+        welcomeTimeout = null;
+      }
+    }
+
+    // Cerrar al hacer clic en el botón
+    closeBtn.addEventListener('click', closeWelcome);
+
+    // Cerrar al hacer clic fuera de la tarjeta (en el overlay)
+    welcomeOverlay.addEventListener('click', function(e) {
+      if (e.target === welcomeOverlay) closeWelcome();
+    });
+
+    // Observar cambios en la clase 'hidden' de mainScreen
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.attributeName === 'class') {
+          // Si mainScreen ya no tiene la clase 'hidden' → se mostró
+          if (!mainScreen.classList.contains('hidden')) {
+            // Mostrar saludo con un pequeño retraso para que la transición sea suave
+            setTimeout(showWelcome, 300);
+          }
+        }
+      });
+    });
+
+    observer.observe(mainScreen, { attributes: true });
+
+    // También ejecutar al inicio si por casualidad ya está visible (p.ej. si no se oculta)
+    if (!mainScreen.classList.contains('hidden')) {
+      setTimeout(showWelcome, 300);
+    }
   })();
 
   // ===== Toggles de tema =====

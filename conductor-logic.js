@@ -22,6 +22,7 @@ const updatedText = document.getElementById('updatedText');
 const panicBtn = document.getElementById('panicBtn');
 const panicOverlay = document.getElementById('panicOverlay');
 const headerDriverName = document.getElementById('headerDriverName');
+const headerDriverSub = document.getElementById('headerDriverSub');
 const headerShiftDot = document.getElementById('headerShiftDot');
 const nameDisplayRow = document.getElementById('nameDisplayRow');
 const checkpointBtnLabel = document.getElementById('checkpointBtnLabel');
@@ -89,12 +90,14 @@ async function tryPin() {
 
   const { data: driver, error } = await supabase
     .from('drivers')
-    .select('*')
+    .select('*, unit:unit_id ( unit_number )')
     .eq('pin', pin)
     .single();
 
   if (driver && !error) {
+    driver.unit_number = driver.unit ? driver.unit.unit_number : null;
     localStorage.setItem('rss_driver_id', driver.id);
+    localStorage.setItem('rss_driver_session_date', todayKey());
     pinError.classList.add('hidden');
     pinInput.value = '';
     pinScreen.classList.add('hidden');
@@ -102,6 +105,40 @@ async function tryPin() {
     unlock(driver);
   } else {
     pinError.classList.remove('hidden');
+  }
+}
+
+// ----- SESIÓN DEL DÍA (no volver a pedir PIN mientras sea el mismo día) -----
+// Cada vez que el conductor cierra/reabre la app (o recarga la página), no
+// tiene que volver a escribir su PIN — mientras siga siendo el mismo día.
+// Al día siguiente, por seguridad, sí se le vuelve a pedir (por si cambió
+// de chofer en esa unidad).
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+async function tryAutoLogin() {
+  const savedId = localStorage.getItem('rss_driver_id');
+  const savedDate = localStorage.getItem('rss_driver_session_date');
+  if (!savedId || !savedDate || savedDate !== todayKey()) return;
+
+  const { data: driver, error } = await supabase
+    .from('drivers')
+    .select('*, unit:unit_id ( unit_number )')
+    .eq('id', savedId)
+    .single();
+
+  if (driver && !error) {
+    driver.unit_number = driver.unit ? driver.unit.unit_number : null;
+    // Ya contestó "en qué unidad andas hoy" cuando puso su PIN la primera
+    // vez en el día, así que aquí no se lo volvemos a preguntar.
+    unlock(driver);
+  } else {
+    // El id guardado ya no es válido (p.ej. lo borraron): limpiamos para
+    // que la próxima vez sí pida PIN normal.
+    localStorage.removeItem('rss_driver_id');
+    localStorage.removeItem('rss_driver_session_date');
   }
 }
 
@@ -160,6 +197,12 @@ async function promptUnitForToday(driver) {
           console.error('Error al guardar la unidad del día:', updErr);
         }
       }
+
+      // Guardamos el número de unidad (no solo el id) para poder mostrarlo
+      // en el encabezado sin tener que volver a consultar Supabase.
+      const chosen = units.find((u) => u.id === driver.unit_id);
+      driver.unit_number = chosen ? chosen.unit_number : null;
+
       resolve();
     }
 
@@ -203,6 +246,7 @@ function goToPinScreen() {
   stopReposoCountdown();
   reposoUntil = null;
   localStorage.removeItem('rss_driver_id');
+  localStorage.removeItem('rss_driver_session_date');
   currentDriver = null;
   mainScreen.classList.add('hidden');
   pinScreen.classList.remove('hidden');
@@ -218,6 +262,12 @@ function updateHeaderDriverName() {
   if (!headerDriverName) return;
   const shown = (currentDriver.name || '').trim();
   headerDriverName.textContent = shown || 'Panel del Conductor';
+
+  if (headerDriverSub) {
+    const unitTxt = currentDriver.unit_number != null ? `Unidad ${currentDriver.unit_number} · ` : '';
+    headerDriverSub.textContent = `${unitTxt}R-18`;
+    headerDriverSub.classList.remove('hidden');
+  }
 }
 
 function setupDriverNameField() {
@@ -370,7 +420,7 @@ turnoBtn.addEventListener('click', async () => {
 });
 
 // ----- REPOSO (15 MIN) -----
-// Nada más es un aviso para el dueño/checador (los pasajeros no lo ven) y
+// Nada más es un aviso para el dueño/checador (no es visible al público) y
 // se quita solo pasados 15 minutos. No afecta la ubicación, que se queda
 // prendida todo el tiempo. Requiere en Supabase, tabla "drivers": columna
 // resting_until (timestamptz, nullable).
@@ -538,7 +588,7 @@ async function startSharingNative() {
 
     toggleBtn.classList.add('on');
     toggleLabel.innerHTML = 'Ubicación<br>activa';
-    statusText.textContent = 'Los pasajeros ya pueden ver tu combi en el mapa.';
+    statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
   } catch (e) {
     console.error('No se pudo iniciar background-geolocation:', e);
     statusText.textContent = 'No se pudo activar la ubicación (revisa permisos en Ajustes).';
@@ -573,7 +623,7 @@ function startSharing() {
 
   toggleBtn.classList.add('on');
   toggleLabel.innerHTML = 'Ubicación<br>activa';
-  statusText.textContent = 'Los pasajeros ya pueden ver tu combi en el mapa.';
+  statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
 
   watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
     enableHighAccuracy: true,
@@ -595,7 +645,7 @@ async function stopSharing() {
 
   toggleBtn.classList.remove('on');
   toggleLabel.innerHTML = 'Encender<br>ubicación';
-  statusText.textContent = 'Presiona el botón para que los pasajeros vean tu combi.';
+  statusText.textContent = 'Presiona el botón para activar tu ubicación en el mapa.';
 
   const { error } = await supabase
     .from('live_locations')
@@ -661,3 +711,6 @@ async function sendPanicAlert(lat, lng) {
     document.getElementById('panicStepError').classList.remove('hidden');
   }
 }
+
+// ----- ARRANQUE: si ya había sesión abierta hoy, entra directo sin PIN -----
+tryAutoLogin();

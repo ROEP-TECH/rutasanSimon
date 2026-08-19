@@ -237,6 +237,7 @@
           <span id="headerShiftDot" class="hidden w-2 h-2 rounded-full shrink-0" style="background:var(--agave); box-shadow:0 0 0 3px var(--agave-glow);"></span>
           <h1 id="headerDriverName" class="font-display font-bold text-base truncate leading-tight">Panel del Conductor</h1>
         </div>
+        <p id="headerDriverSub" class="hidden text-[11px] font-mono leading-tight" style="color:var(--ink-soft);"></p>
       </div>
 
       <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
@@ -258,7 +259,7 @@
       <span id="toggleLabel" class="text-sm">Encender<br>ubicación</span>
     </button>
     <p id="statusText" class="text-sm mt-4 text-center max-w-xs" style="color:var(--ink-soft);">
-      Presiona el botón para que los pasajeros vean tu combi en tiempo real en el mapa.
+      Presiona el botón para que tu combi esté en tiempo real en el mapa.
     </p>
 
     <div id="supabaseWarning" class="hidden placard p-4 mt-5 max-w-sm w-full text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
@@ -270,7 +271,7 @@
     <button id="checkpointBtn" class="btn-lift w-full max-w-sm mt-7 py-4 rounded-2xl font-display font-semibold text-[15px] flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
       <i data-lucide="flag" class="w-4 h-4"></i> <span id="checkpointBtnLabel">Salí de base San Simón</span>
     </button>
-    <p id="checkpointSavedText" class="text-xs mt-2 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. Los pasajeros ya lo ven.</p>
+    <p id="checkpointSavedText" class="text-xs mt-2 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.</p>
 
     <!-- 3) Turno y reposo: dos botones cortos, uno junto al otro, no ocupan
          una tarjeta completa cada uno. -->

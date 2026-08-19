@@ -138,6 +138,7 @@ function renderOwnersTable() {
   tbody.innerHTML = ownersCache.map((o) => `
     <tr data-id="${o.id}">
       <td><input class="field owner-name-input" value="${escapeAttr(o.full_name || '')}" style="min-width:140px"></td>
+      <td><input class="field owner-phone-input" value="${escapeAttr(o.phone || '')}" style="min-width:120px" type="tel" placeholder="Teléfono"></td>
       <td class="font-mono text-xs">${escapeHtml(o.email || '—')}</td>
       <td>
         <select class="field owner-role-input" style="min-width:130px">
@@ -163,10 +164,11 @@ async function saveOwner(e) {
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
   const full_name = tr.querySelector('.owner-name-input').value.trim();
+  const phone = tr.querySelector('.owner-phone-input').value.trim();
   const role = tr.querySelector('.owner-role-input').value;
 
   const ok = await safeCall(
-    supabase.from('owners').update({ full_name, role }).eq('id', id),
+    supabase.from('owners').update({ full_name, phone, role }).eq('id', id),
     'Dueño actualizado.',
     'Error al actualizar dueño'
   );
@@ -201,6 +203,7 @@ async function deleteOwner(e) {
 
 document.getElementById('addOwnerBtn').addEventListener('click', async () => {
   const full_name = document.getElementById('ownerFullName').value.trim();
+  const phone = document.getElementById('ownerPhone').value.trim();
   const email = document.getElementById('ownerEmail').value.trim();
   const password = document.getElementById('ownerPassword').value.trim();
   const role = document.getElementById('ownerRole').value;
@@ -214,10 +217,11 @@ document.getElementById('addOwnerBtn').addEventListener('click', async () => {
     return;
   }
 
-  const result = await callAdminOwnersFunction({ action: 'create', full_name, email, password, role });
+  const result = await callAdminOwnersFunction({ action: 'create', full_name, phone, email, password, role });
   if (result.ok) {
     showMsg('Dueño creado.');
     document.getElementById('ownerFullName').value = '';
+    document.getElementById('ownerPhone').value = '';
     document.getElementById('ownerEmail').value = '';
     document.getElementById('ownerPassword').value = '';
     document.getElementById('ownerRole').value = 'owner';
@@ -365,6 +369,7 @@ function renderDriversTable(drivers) {
   tbody.innerHTML = drivers.map((d) => `
     <tr data-id="${d.id}">
       <td><input class="field driver-name-input" value="${escapeAttr(d.name || '')}" style="min-width:130px"></td>
+      <td><input class="field driver-phone-input" value="${escapeAttr(d.phone || '')}" style="min-width:110px" type="tel" placeholder="Teléfono"></td>
       <td><input class="field driver-pin-input" value="${escapeAttr(d.pin || '')}" style="max-width:90px" inputmode="numeric"></td>
       <td>
         <select class="field driver-unit-input" style="min-width:120px">
@@ -398,13 +403,14 @@ async function saveDriver(e) {
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
   const name = tr.querySelector('.driver-name-input').value.trim();
+  const phone = tr.querySelector('.driver-phone-input').value.trim();
   const pin = tr.querySelector('.driver-pin-input').value.trim();
   const unit_id = tr.querySelector('.driver-unit-input').value || null;
   const owner_id = tr.querySelector('.driver-owner-input').value || null;
   const active = tr.querySelector('.driver-active-input').checked;
 
   const ok = await safeCall(
-    supabase.from('drivers').update({ name, pin, unit_id, owner_id, active }).eq('id', id),
+    supabase.from('drivers').update({ name, phone, pin, unit_id, owner_id, active }).eq('id', id),
     'Conductor actualizado.',
     'Error al actualizar conductor'
   );
@@ -421,6 +427,7 @@ async function deleteDriver(e) {
 
 document.getElementById('addDriverBtn').addEventListener('click', async () => {
   const name = document.getElementById('driverName').value.trim();
+  const phone = document.getElementById('driverPhone').value.trim();
   const pin = document.getElementById('driverPin').value.trim();
   const routeRaw = document.getElementById('driverRoute').value.trim();
   const unit_id = document.getElementById('driverUnit').value || null;
@@ -429,12 +436,13 @@ document.getElementById('addDriverBtn').addEventListener('click', async () => {
   if (!name || !pin) { showMsg('Escribe nombre y PIN.', 'error'); return; }
 
   const ok = await safeCall(
-    supabase.from('drivers').insert({ name, pin, route: routeRaw || null, unit_id, owner_id }),
+    supabase.from('drivers').insert({ name, phone, pin, route: routeRaw || null, unit_id, owner_id }),
     'Conductor creado.',
     'Error al crear conductor'
   );
   if (ok) {
     document.getElementById('driverName').value = '';
+    document.getElementById('driverPhone').value = '';
     document.getElementById('driverPin').value = '';
     document.getElementById('driverRoute').value = '';
     await loadDrivers();
@@ -455,6 +463,7 @@ function renderCheckadoresTable(checadores) {
   tbody.innerHTML = checadores.map((c) => `
     <tr data-id="${c.id}">
       <td><input class="field checador-name-input" value="${escapeAttr(c.name || '')}" style="min-width:140px"></td>
+      <td><input class="field checador-phone-input" value="${escapeAttr(c.phone || '')}" style="min-width:110px" type="tel" placeholder="Teléfono"></td>
       <td><input class="field checador-pin-input" value="${escapeAttr(c.pin || '')}" style="max-width:90px" inputmode="numeric"></td>
       <td class="whitespace-nowrap">
         <button class="btn btn-ghost text-xs checador-save-btn">Guardar</button>
@@ -471,10 +480,11 @@ async function saveChecador(e) {
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
   const name = tr.querySelector('.checador-name-input').value.trim();
+  const phone = tr.querySelector('.checador-phone-input').value.trim();
   const pin = tr.querySelector('.checador-pin-input').value.trim();
 
   const ok = await safeCall(
-    supabase.from('checadores').update({ name, pin }).eq('id', id),
+    supabase.from('checadores').update({ name, phone, pin }).eq('id', id),
     'Checador actualizado.',
     'Error al actualizar checador'
   );
@@ -491,16 +501,18 @@ async function deleteChecador(e) {
 
 document.getElementById('addChecadorBtn').addEventListener('click', async () => {
   const name = document.getElementById('checadorName').value.trim();
+  const phone = document.getElementById('checadorPhone').value.trim();
   const pin = document.getElementById('checadorPin').value.trim();
   if (!name || !pin) { showMsg('Escribe nombre y PIN.', 'error'); return; }
 
   const ok = await safeCall(
-    supabase.from('checadores').insert({ name, pin }),
+    supabase.from('checadores').insert({ name, phone, pin }),
     'Checador creado.',
     'Error al crear checador'
   );
   if (ok) {
     document.getElementById('checadorName').value = '';
+    document.getElementById('checadorPhone').value = '';
     document.getElementById('checadorPin').value = '';
     await loadCheckadores();
   }

@@ -934,6 +934,116 @@
       try{ localStorage.setItem('rss_theme', next); }catch(e){}
     });
   });
+  // ===== SISTEMA DE ACTUALIZACIONES =====
+(function() {
+  const VERSION_ACTUAL = '1.0'; // Cámbiala cuando subas una nueva versión
+
+  function checkUpdate() {
+    fetch('version.json?t=' + Date.now()) // Evita caché
+      .then(res => {
+        if (!res.ok) throw new Error('No se pudo obtener la versión');
+        return res.json();
+      })
+      .then(data => {
+        if (data.version && data.version !== VERSION_ACTUAL) {
+          mostrarModalActualizacion(data);
+        }
+      })
+      .catch(err => {
+        // No mostrar error al usuario, solo silencioso
+        console.log('No se pudo verificar actualizaciones:', err);
+      });
+  }
+
+  function mostrarModalActualizacion(data) {
+    // Si ya hay un modal mostrado, no duplicar
+    if (document.getElementById('updateModalOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'updateModalOverlay';
+    overlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(5,7,10,0.75); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1.5rem; animation: fadeIn 0.3s ease;
+    `;
+
+    const card = document.createElement('div');
+    card.style.cssText = `
+      max-width: 22rem; width: 100%; background: var(--surface);
+      border-radius: 2rem; padding: 1.8rem 1.5rem;
+      border: 1px solid var(--border); box-shadow: var(--shadow-md);
+      text-align: center; animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    `;
+
+    card.innerHTML = `
+      <div style="font-size: 3rem; margin-bottom: 0.5rem;">🚀</div>
+      <h2 style="font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.3rem; margin-bottom: 0.25rem; color: var(--ink);">¡Nueva versión disponible!</h2>
+      <p style="color: var(--ink-soft); font-size: 0.95rem; margin-bottom: 1.5rem; line-height: 1.5;">
+        ${data.mensaje || 'Actualiza para disfrutar de las últimas mejoras.'}
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <button id="updateNowBtn" style="
+          padding: 0.8rem; border-radius: 1rem; border: none;
+          background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
+          color: #052414; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1rem;
+          cursor: pointer; transition: all 0.2s;
+        ">Actualizar ahora</button>
+        <button id="updateLaterBtn" style="
+          background: transparent; border: none; color: var(--ink-soft);
+          font-family: 'Sora', sans-serif; font-weight: 400; font-size: 0.85rem;
+          cursor: pointer; transition: all 0.2s;
+        ">Recordármelo después</button>
+      </div>
+      <div style="margin-top: 1rem; font-size: 0.7rem; color: var(--ink-faint);">
+        Versión ${data.version} · ${data.fecha || ''}
+      </div>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // Eventos
+    document.getElementById('updateNowBtn').addEventListener('click', function() {
+      // Forzar recarga limpia (sin caché)
+      window.location.reload(true);
+    });
+
+    document.getElementById('updateLaterBtn').addEventListener('click', function() {
+      overlay.remove();
+      // Guardar en localStorage para no molestar por 1 hora
+      localStorage.setItem('update_dismissed_until', Date.now() + 3600000);
+    });
+
+    // También cerrar si tocan fuera de la tarjeta
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) {
+        overlay.remove();
+        localStorage.setItem('update_dismissed_until', Date.now() + 3600000);
+      }
+    });
+  }
+
+  // ===== EJECUTAR =====
+  // Esperar 5 segundos después de cargar la página para no bloquear la experiencia
+  setTimeout(function() {
+    // Verificar si ya se descartó recientemente (menos de 1 hora)
+    const dismissed = localStorage.getItem('update_dismissed_until');
+    if (dismissed && parseInt(dismissed) > Date.now()) {
+      return; // No molestar
+    }
+    checkUpdate();
+  }, 5000);
+
+  // También revisar cada 10 minutos (para usuarios que mantienen la app abierta)
+  setInterval(function() {
+    const dismissed = localStorage.getItem('update_dismissed_until');
+    if (dismissed && parseInt(dismissed) > Date.now()) {
+      return;
+    }
+    checkUpdate();
+  }, 600000); // 10 minutos
+})();
 </script>
 </body>
 </html>

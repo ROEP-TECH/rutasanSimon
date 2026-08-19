@@ -28,6 +28,10 @@ const checkpointBtnLabel = document.getElementById('checkpointBtnLabel');
 const turnoBtn = document.getElementById('turnoBtn');
 const turnoReposoStatus = document.getElementById('turnoReposoStatus');
 const reposoBtn = document.getElementById('reposoBtn');
+const unitPickerOverlay = document.getElementById('unitPickerOverlay');
+const unitPickerGrid = document.getElementById('unitPickerGrid');
+const unitPickerEmpty = document.getElementById('unitPickerEmpty');
+const unitPickerSkipBtn = document.getElementById('unitPickerSkipBtn');
 
 let currentDriver = null;
 let watchId = null;
@@ -93,10 +97,83 @@ async function tryPin() {
     localStorage.setItem('rss_driver_id', driver.id);
     pinError.classList.add('hidden');
     pinInput.value = '';
+    pinScreen.classList.add('hidden');
+    await promptUnitForToday(driver);
     unlock(driver);
   } else {
     pinError.classList.remove('hidden');
   }
+}
+
+// ----- ¿EN QUÉ UNIDAD ANDAS HOY? -----
+// Se pregunta cada vez que el conductor entra con su PIN, para que el
+// dueño y el checador siempre vean la unidad correcta ese día (útil
+// cuando hay conductores de relevo que no siempre traen la misma combi).
+// No bloquea al conductor si falla la carga o no hay unidades activas.
+async function promptUnitForToday(driver) {
+  return new Promise(async (resolve) => {
+    let units = [];
+    try {
+      const { data, error } = await supabase
+        .from('units')
+        .select('id, unit_number')
+        .neq('active', false)
+        .order('unit_number', { ascending: true });
+      if (error) throw error;
+      units = data || [];
+    } catch (e) {
+      console.error('Error cargando unidades:', e);
+      resolve();
+      return;
+    }
+
+    if (units.length === 0) {
+      resolve();
+      return;
+    }
+
+    unitPickerEmpty.classList.add('hidden');
+    unitPickerGrid.innerHTML = units.map((u) => `
+      <button class="unit-pick-btn ${u.id === driver.unit_id ? 'current' : ''}" data-unit-id="${u.id}">
+        <span>${u.unit_number}</span>
+        ${u.id === driver.unit_id ? '<span class="unit-pick-tag">ACTUAL</span>' : ''}
+      </button>
+    `).join('');
+
+    // Si ya trae una unidad asignada, le damos la opción de continuar
+    // sin volver a tocar nada (por si solo quiere confirmar rápido).
+    unitPickerSkipBtn.classList.toggle('hidden', !driver.unit_id);
+
+    unitPickerOverlay.classList.add('show');
+    if (window.lucide) lucide.createIcons();
+
+    async function finish(unitId) {
+      unitPickerOverlay.classList.remove('show');
+      unitPickerGrid.querySelectorAll('.unit-pick-btn').forEach((b) => b.removeEventListener('click', onBtnClick));
+      unitPickerSkipBtn.removeEventListener('click', onSkipClick);
+
+      if (unitId && unitId !== driver.unit_id) {
+        const { error: updErr } = await supabase.from('drivers').update({ unit_id: unitId }).eq('id', driver.id);
+        if (!updErr) {
+          driver.unit_id = unitId;
+        } else {
+          console.error('Error al guardar la unidad del día:', updErr);
+        }
+      }
+      resolve();
+    }
+
+    function onBtnClick(e) {
+      if (navigator.vibrate) navigator.vibrate(15);
+      finish(e.currentTarget.dataset.unitId);
+    }
+    function onSkipClick() {
+      finish(driver.unit_id || null);
+    }
+
+    unitPickerGrid.querySelectorAll('.unit-pick-btn').forEach((b) => b.addEventListener('click', onBtnClick));
+    unitPickerSkipBtn.addEventListener('click', onSkipClick);
+  });
 }
 
 function unlock(driver) {

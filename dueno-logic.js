@@ -760,6 +760,7 @@ async function renderAlerts() {
     list.innerHTML = '';
     document.getElementById('alarmBar').classList.remove('show');
     document.getElementById('kpiAlerts').textContent = '0';
+    stopAlarmSound();
     return;
   }
   empty.classList.add('hidden');
@@ -769,8 +770,10 @@ async function renderAlerts() {
 
   if (pendingCount > 0) {
     document.getElementById('alarmBar').classList.add('show');
+    playAlarmSound();
   } else {
     document.getElementById('alarmBar').classList.remove('show');
+    stopAlarmSound();
   }
 
   list.innerHTML = alerts.map(a => {
@@ -814,9 +817,48 @@ async function renderAlerts() {
   if (window.lucide) lucide.createIcons();
 }
 
+// ----- SONIDO DE ALARMA (alertas de pánico) -----
+// El navegador bloquea el sonido automático hasta que haya habido algún
+// clic/toque del usuario en la página. Por eso "desbloqueamos" el audio
+// en la primera interacción (login, clic en cualquier lado), y luego ya
+// se puede reproducir solo cuando llega una alerta nueva.
+const trackingAudio = document.getElementById('trackingAudio');
+let audioUnlocked = false;
+
+function unlockAlarmAudio() {
+  if (audioUnlocked || !trackingAudio) return;
+  trackingAudio.volume = 1;
+  trackingAudio.play().then(() => {
+    trackingAudio.pause();
+    trackingAudio.currentTime = 0;
+    audioUnlocked = true;
+  }).catch(() => {
+    // Todavía no hay permiso del navegador; se reintenta en el próximo clic.
+  });
+  document.removeEventListener('click', unlockAlarmAudio);
+  document.removeEventListener('touchstart', unlockAlarmAudio);
+}
+document.addEventListener('click', unlockAlarmAudio);
+document.addEventListener('touchstart', unlockAlarmAudio);
+
+function playAlarmSound() {
+  if (!trackingAudio) return;
+  trackingAudio.play().catch(() => {
+    // Si el navegador todavía no lo permite, se reproducirá en cuanto
+    // el usuario toque la pantalla (ver unlockAlarmAudio arriba).
+  });
+}
+
+function stopAlarmSound() {
+  if (!trackingAudio) return;
+  trackingAudio.pause();
+  trackingAudio.currentTime = 0;
+}
+
 // ----- BOTÓN DE SILENCIAR ALARMA -----
 document.getElementById('silenceBtn').addEventListener('click', () => {
   document.getElementById('alarmBar').classList.remove('show');
+  stopAlarmSound();
 });
 
 // ----- MENÚ MÓVIL (hamburguesa): el sidebar de escritorio estaba oculto por completo en

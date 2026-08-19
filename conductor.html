@@ -38,7 +38,7 @@
 <script type="module" src="conductor-logic.js"></script>
 
 <style>
-  /* ===== TOKENS — mismo lenguaje visual que el Panel del Dueño ===== */
+  /* ===== TOKENS ===== */
   :root{
     --canvas:#0A0E13; --surface:#11161D; --surface-2:#171E27; --surface-3:#1D2530;
     --ink:#EDF1F5; --ink-soft:#8A94A3; --ink-faint:#5C6572;
@@ -80,7 +80,7 @@
   .placard{ background:var(--surface); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
   [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
 
-  /* Fondo ambiental sutil: rejilla + resplandor, igual que el panel del dueño */
+  /* Fondo ambiental sutil: rejilla + resplandor */
   .bg-grid{
     background-image:
       radial-gradient(60rem 30rem at 15% -10%, rgba(63,176,240,.10), transparent 60%),
@@ -225,7 +225,6 @@
     width: 20px;
     height: 20px;
   }
-  /* Tooltip o indicador de "cambiar foto" */
   .avatar-wrapper .avatar-hint {
     position: absolute;
     bottom: -6px;
@@ -247,6 +246,10 @@
   }
   .avatar-wrapper:hover .avatar-hint {
     opacity: 1;
+  }
+  /* Input de archivo oculto */
+  #avatarFileInput {
+    display: none;
   }
 </style>
 </head>
@@ -291,6 +294,8 @@
           <i id="avatarDefaultIcon" data-lucide="user" class="avatar-default"></i>
           <span class="avatar-hint">✎</span>
         </div>
+        <!-- Input de archivo oculto -->
+        <input type="file" id="avatarFileInput" accept="image/*">
 
         <div class="min-w-0">
           <div id="nameDisplayRow" class="flex items-center gap-1.5 min-w-0">
@@ -411,19 +416,18 @@
   </div>
 </div>
 
-<!-- ===== NUEVO: Script para el avatar personalizado ===== -->
+<!-- ===== NUEVO: Script para subir imagen local ===== -->
 <script>
   (function() {
-    // Elementos
     const avatarWrapper = document.getElementById('avatarWrapper');
     const avatarImg = document.getElementById('driverAvatar');
     const avatarDefault = document.getElementById('avatarDefaultIcon');
-    const driverNameEl = document.getElementById('headerDriverName');
+    const fileInput = document.getElementById('avatarFileInput');
 
-    // Cargar avatar guardado
+    // Cargar avatar guardado (base64)
     function loadAvatar() {
-      const stored = localStorage.getItem('driver_avatar_url');
-      if (stored && stored.trim() !== '') {
+      const stored = localStorage.getItem('driver_avatar_base64');
+      if (stored && stored.startsWith('data:image')) {
         avatarImg.src = stored;
         avatarImg.style.display = 'block';
         avatarDefault.style.display = 'none';
@@ -433,52 +437,83 @@
       }
     }
 
-    // Guardar avatar
-    function saveAvatar(url) {
-      if (url && url.trim() !== '') {
-        localStorage.setItem('driver_avatar_url', url.trim());
-        avatarImg.src = url.trim();
-        avatarImg.style.display = 'block';
-        avatarDefault.style.display = 'none';
+    // Guardar avatar (base64)
+    function saveAvatar(base64) {
+      if (base64 && base64.startsWith('data:image')) {
+        try {
+          localStorage.setItem('driver_avatar_base64', base64);
+          avatarImg.src = base64;
+          avatarImg.style.display = 'block';
+          avatarDefault.style.display = 'none';
+        } catch (e) {
+          alert('La imagen es demasiado grande para guardarla localmente. Intenta con una imagen más pequeña (menos de 500KB).');
+          console.warn('Error guardando avatar:', e);
+        }
       } else {
-        localStorage.removeItem('driver_avatar_url');
+        localStorage.removeItem('driver_avatar_base64');
         avatarImg.style.display = 'none';
         avatarDefault.style.display = 'block';
       }
     }
 
-    // Mostrar diálogo para cambiar avatar
-    function promptAvatar() {
-      const current = localStorage.getItem('driver_avatar_url') || '';
-      const action = confirm('¿Quieres cambiar tu foto de perfil?\n- "Aceptar" para pegar una URL de imagen.\n- "Cancelar" para eliminar la foto actual.');
-      if (action) {
-        const url = prompt('Pega la URL de tu imagen (puedes subirla a Imgur, Postimg, etc.)', current);
-        if (url !== null) {
-          saveAvatar(url);
-        }
-      } else {
-        // Eliminar
-        if (current) {
-          if (confirm('¿Eliminar tu foto personalizada?')) {
-            saveAvatar('');
-          }
-        }
+    // Manejar la selección de archivo
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validar que sea imagen
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor selecciona una imagen (JPG, PNG, GIF, etc.)');
+        return;
       }
+
+      // Limitar tamaño (ej. 1 MB)
+      if (file.size > 1 * 1024 * 1024) {
+        alert('La imagen es demasiado grande (máximo 1 MB). Por favor, comprime o elige una más pequeña.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64 = e.target.result; // data:image/...
+        saveAvatar(base64);
+      };
+      reader.onerror = function() {
+        alert('Error al leer la imagen. Intenta de nuevo.');
+      };
+      reader.readAsDataURL(file);
     }
 
-    // Evento clic en el avatar
-    avatarWrapper.addEventListener('click', promptAvatar);
+    // Abrir el selector de archivos al hacer clic en el avatar
+    avatarWrapper.addEventListener('click', function() {
+      // Si ya hay avatar, preguntar si quiere cambiarlo o eliminarlo
+      const hasAvatar = localStorage.getItem('driver_avatar_base64') && localStorage.getItem('driver_avatar_base64').startsWith('data:image');
+      if (hasAvatar) {
+        const action = confirm('¿Quieres cambiar tu foto de perfil?\n- "Aceptar" para subir una nueva imagen.\n- "Cancelar" para eliminar la foto actual.');
+        if (action) {
+          fileInput.click(); // Abre el selector
+        } else {
+          // Eliminar
+          if (confirm('¿Eliminar tu foto personalizada?')) {
+            saveAvatar(null);
+          }
+        }
+      } else {
+        // No hay avatar, directamente abrir selector
+        fileInput.click();
+      }
+    });
+
+    // Escuchar cambio en el input file
+    fileInput.addEventListener('change', handleFileSelect);
 
     // Cargar al inicio
     loadAvatar();
-
-    // También podríamos escuchar cambios en el nombre (si se actualiza desde la lógica)
-    // pero no es necesario.
   })();
 </script>
 
 <script>
-  // Los theme-toggles ya están al final del HTML original, los dejamos
+  // Theme toggles
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';

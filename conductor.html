@@ -38,38 +38,64 @@
 <script type="module" src="conductor-logic.js"></script>
 
 <style>
-  /* ===== TOKENS ===== */
+  /* ===== TOKENS — Colores de la ruta: verde y blanco ===== */
   :root{
-    --canvas:#0A0E13; --surface:#11161D; --surface-2:#171E27; --surface-3:#1D2530;
-    --ink:#EDF1F5; --ink-soft:#8A94A3; --ink-faint:#5C6572;
-    --border:#232B36; --border-soft:#1A212B;
+    /* Modo oscuro (por defecto) */
+    --canvas:#0A0E13;
+    --surface:#11161D;
+    --surface-2:#171E27;
+    --surface-3:#1D2530;
+    --ink:#EDF1F5;
+    --ink-soft:#8A94A3;
+    --ink-faint:#5C6572;
+    --border:#232B36;
+    --border-soft:#1A212B;
 
-    --talavera:#3FB0F0; --talavera-dark:#1C86C4; --talavera-glow:rgba(63,176,240,.35);
-    --agave:#2FD98A; --agave-dark:#1FAE6D; --agave-glow:rgba(47,217,138,.35);
-    --cempasuchil:#FFAE33; --cempasuchil-dark:#E08E12; --cempasuchil-glow:rgba(255,174,51,.3);
-    --alerta:#FF5C4D; --alerta-dark:#D93E30; --alerta-bg:rgba(255,92,77,.14); --alerta-glow:rgba(255,92,77,.35);
+    /* Verde claro (acento principal) */
+    --verde:#2FD98A;
+    --verde-dark:#1FAE6D;
+    --verde-glow:rgba(47,217,138,.35);
+    --verde-bg:rgba(47,217,138,.12);
+
+    /* Blanco/gris claro para contrastes */
+    --blanco:#FFFFFF;
+    --blanco-soft:#E8EDF2;
 
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -12px rgba(0,0,0,.55);
     --shadow-md: 0 20px 50px -18px rgba(0,0,0,.65);
   }
 
+  /* ===== TEMA CLARO: fondo blanco, acentos en verde oscuro ===== */
   html[data-theme="light"]{
     color-scheme: light;
-    --canvas:#FAF7F0; --surface:#FFFFFF; --surface-2:#F4EEDC; --surface-3:#EDE4C8;
-    --ink:#221B12; --ink-soft:#7C7261; --ink-faint:#9C9280;
-    --border:#E4DBC5; --border-soft:#EFE8D4;
+    --canvas:#F8FBF8;
+    --surface:#FFFFFF;
+    --surface-2:#F0F5F0;
+    --surface-3:#E2EAE2;
+    --ink:#1A2A1A;
+    --ink-soft:#4A6A4A;
+    --ink-faint:#8AA08A;
+    --border:#C8D8C8;
+    --border-soft:#DCE8DC;
 
-    --talavera:#0E80BE; --talavera-dark:#0A5F8E; --talavera-glow:rgba(14,128,190,.22);
-    --agave:#1E9E5A; --agave-dark:#147A43; --agave-glow:rgba(30,158,90,.22);
-    --cempasuchil:#F5900C; --cempasuchil-dark:#CB7208; --cempasuchil-glow:rgba(245,144,12,.22);
-    --alerta:#E1483A; --alerta-dark:#B93627; --alerta-bg:rgba(225,72,58,.12); --alerta-glow:rgba(225,72,58,.22);
+    /* Verde más oscuro para modo claro */
+    --verde:#1E9E5A;
+    --verde-dark:#147A43;
+    --verde-glow:rgba(30,158,90,.22);
+    --verde-bg:rgba(30,158,90,.10);
 
-    --shadow: 0 1px 2px rgba(34,27,18,.06), 0 6px 16px -8px rgba(34,27,18,.14);
-    --shadow-md: 0 14px 34px -16px rgba(34,27,18,.2);
+    --blanco:#FFFFFF;
+    --blanco-soft:#F0F5F0;
+
+    --shadow: 0 1px 2px rgba(26,42,26,.06), 0 6px 16px -8px rgba(26,42,26,.14);
+    --shadow-md: 0 14px 34px -16px rgba(26,42,26,.2);
   }
+
+  /* Iconos del tema (sol/luna) */
   .theme-toggle-btn .theme-icon-moon{ display:none; }
   html[data-theme="light"] .theme-toggle-btn .theme-icon-sun{ display:none; }
   html[data-theme="light"] .theme-toggle-btn .theme-icon-moon{ display:flex; }
+
   *{ -webkit-tap-highlight-color: transparent; }
   html{ color-scheme: dark; }
   html, body{ height:100%; }
@@ -81,8 +107,8 @@
 
   .bg-grid{
     background-image:
-      radial-gradient(60rem 30rem at 15% -10%, rgba(63,176,240,.10), transparent 60%),
-      radial-gradient(50rem 26rem at 110% 10%, rgba(47,217,138,.07), transparent 55%),
+      radial-gradient(60rem 30rem at 15% -10%, var(--verde-glow) 0.3, transparent 60%),
+      radial-gradient(50rem 26rem at 110% 10%, var(--verde-glow) 0.2, transparent 55%),
       linear-gradient(var(--border-soft) 1px, transparent 1px),
       linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
     background-size: auto, auto, 42px 42px, 42px 42px;
@@ -93,6 +119,7 @@
   .btn-lift:hover{ transform: translateY(-1px); box-shadow: var(--shadow-md); }
   .btn-lift:active{ transform: translateY(0) scale(.97); }
 
+  /* Botón de ubicación (grande) */
   #toggleBtn{
     width:190px; height:190px; border-radius:50%;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -103,8 +130,8 @@
   #toggleBtn:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
   #toggleBtn:active{ transform: scale(.98); }
   #toggleBtn.on{
-    background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
-    border-color:var(--agave-dark); color:#052414; box-shadow: 0 20px 50px -14px var(--agave-glow);
+    background: linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%);
+    border-color:var(--verde-dark); color:#052414; box-shadow: 0 20px 50px -14px var(--verde-glow);
   }
   #toggleBtn.on .pulseDot{ animation: pulse 1.4s ease-out infinite; }
   @keyframes pulse{
@@ -116,17 +143,19 @@
   #toggleBtn.on .pulseDot{ background:rgba(5,36,20,.25); }
   #toggleBtn.on .pulseDot [data-lucide]{ width:14px; height:14px; color:#052414; }
 
+  /* Botón de pánico (rojo) se mantiene igual */
   #panicBtn{
     position:fixed; right:18px; bottom:18px; z-index:55;
     width:64px; height:64px; border-radius:50%;
-    background: linear-gradient(155deg, var(--alerta) 0%, var(--alerta-dark) 100%); color:#fff;
+    background: linear-gradient(155deg, #FF5C4D 0%, #D93E30 100%); color:#fff;
     display:flex; align-items:center; justify-content:center;
-    box-shadow:0 10px 30px -8px var(--alerta-glow), 0 0 0 4px var(--canvas);
+    box-shadow:0 10px 30px -8px rgba(255,92,77,.35), 0 0 0 4px var(--canvas);
     border:2px solid rgba(255,255,255,.15);
     transition: all .25s cubic-bezier(.2,.8,.2,1);
   }
   #panicBtn:hover{ transform: translateY(-2px) scale(1.03); }
   #panicBtn:active{ transform: scale(.94); }
+
   #panicOverlay{
     position:fixed; inset:0; z-index:70;
     background:rgba(5,7,10,.68); backdrop-filter: blur(2px);
@@ -163,9 +192,9 @@
     display:flex; flex-direction:column; align-items:center; gap:.25rem;
     transition: all .2s ease;
   }
-  .unit-pick-btn:hover{ border-color:var(--talavera); transform: translateY(-1px); }
+  .unit-pick-btn:hover{ border-color:var(--verde); transform: translateY(-1px); }
   .unit-pick-btn:active{ transform: scale(.97); }
-  .unit-pick-btn.current{ background: linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); border-color:var(--talavera-dark); color:#08131c; box-shadow:var(--shadow); }
+  .unit-pick-btn.current{ background: linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); border-color:var(--verde-dark); color:#052414; box-shadow:var(--shadow); }
   .unit-pick-btn .unit-pick-tag{ font-size:10px; font-weight:600; letter-spacing:.02em; opacity:.8; }
 
   .ramal-btn{
@@ -173,18 +202,20 @@
     border-radius:1rem; padding:.8rem; font-family:'Sora', sans-serif; font-weight:600; font-size:14px;
     transition: all .2s ease;
   }
-  .ramal-btn:not(.active):hover{ border-color:var(--talavera); color:var(--ink); transform: translateY(-1px); }
-  .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#1b1002; box-shadow:var(--shadow); }
-  .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#052414; box-shadow:var(--shadow); }
+  .ramal-btn:not(.active):hover{ border-color:var(--verde); color:var(--ink); transform: translateY(-1px); }
+  .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); border-color:var(--verde-dark); color:#052414; box-shadow:var(--shadow); }
+  .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); border-color:var(--verde-dark); color:#052414; box-shadow:var(--shadow); }
 
-  #turnoBtn.on{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%) !important; color:#052414 !important; }
+  /* Turno y reposo */
+  #turnoBtn.on{ background: linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%) !important; color:#052414 !important; }
   #reposoBtn.active{ background:var(--surface-2) !important; color:var(--ink-soft) !important; border:1.5px dashed var(--border); }
 
+  /* Input PIN */
   #pinInput{ letter-spacing:.15em; }
 
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-thumb{ background:var(--surface-3); border-radius:999px; }
-  ::selection{ background: var(--talavera-glow); }
+  ::selection{ background: var(--verde-glow); }
   input::placeholder{ color: var(--ink-faint); }
 
   @media (prefers-reduced-motion: reduce){
@@ -208,7 +239,7 @@
     position: relative;
   }
   .avatar-wrapper:hover {
-    border-color: var(--talavera);
+    border-color: var(--verde);
     transform: scale(1.05);
   }
   .avatar-wrapper img {
@@ -225,8 +256,8 @@
     position: absolute;
     bottom: -4px;
     right: -4px;
-    background: var(--talavera);
-    color: #08131c;
+    background: var(--verde);
+    color: #052414;
     border-radius: 999px;
     width: 20px;
     height: 20px;
@@ -331,12 +362,12 @@
     transform: scale(0.97);
   }
   .profile-actions .btn-danger {
-    background: var(--alerta-bg);
-    border-color: var(--alerta);
-    color: var(--alerta);
+    background: var(--alerta-bg, rgba(255,92,77,.12));
+    border-color: var(--alerta, #FF5C4D);
+    color: var(--alerta, #FF5C4D);
   }
   .profile-actions .btn-danger:hover {
-    background: var(--alerta);
+    background: var(--alerta, #FF5C4D);
     color: #fff;
   }
   .profile-actions .btn-close {
@@ -381,7 +412,7 @@
     font-weight: 700;
     font-size: 1.1rem;
     margin-bottom: 0.5rem;
-    color: var(--alerta);
+    color: var(--alerta, #FF5C4D);
   }
   #confirmModalSheet p {
     font-size: 0.9rem;
@@ -411,18 +442,17 @@
     box-shadow: var(--shadow-md);
   }
   .confirm-actions .btn-confirm-danger {
-    background: var(--alerta);
-    border-color: var(--alerta-dark);
+    background: var(--alerta, #FF5C4D);
+    border-color: var(--alerta-dark, #D93E30);
     color: #fff;
   }
   .confirm-actions .btn-confirm-danger:hover {
-    background: var(--alerta-dark);
+    background: var(--alerta-dark, #D93E30);
   }
   .confirm-actions .btn-confirm-cancel:hover {
     background: var(--surface-3);
   }
 
-  /* input file oculto */
   #avatarFileInput {
     display: none;
   }
@@ -437,7 +467,7 @@
       <span class="theme-icon-sun flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
       <span class="theme-icon-moon flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
     </button>
-    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">
+    <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">
       <i data-lucide="bus"></i>
     </div>
     <h1 class="font-display font-semibold text-xl">Panel del Conductor</h1>
@@ -446,15 +476,14 @@
     <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN"
            class="mt-2 w-full text-center text-2xl font-mono py-3 rounded-2xl border"
            style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
-    <p id="pinError" class="text-sm mt-2 hidden" style="color:var(--alerta);">PIN incorrecto, intenta otra vez.</p>
-    <button id="pinSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Entrar</button>
+    <p id="pinError" class="text-sm mt-2 hidden" style="color:var(--alerta, #FF5C4D);">PIN incorrecto, intenta otra vez.</p>
+    <button id="pinSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">Entrar</button>
   </div>
 </div>
 
 <!-- PANEL PRINCIPAL -->
 <div id="mainScreen" class="hidden min-h-screen flex flex-col items-center pb-24">
 
-  <!-- Barra superior -->
   <header class="sticky top-0 z-40 w-full flex justify-center px-4 pt-[env(safe-area-inset-top)]" style="background:color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); border-bottom:1px solid var(--border-soft);">
     <div class="w-full max-w-3xl flex items-center justify-between gap-2 py-2.5">
       <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
@@ -470,14 +499,14 @@
         </div>
         <div class="min-w-0">
           <div id="nameDisplayRow" class="flex items-center gap-1.5 min-w-0">
-            <span id="headerShiftDot" class="hidden w-2 h-2 rounded-full shrink-0" style="background:var(--agave); box-shadow:0 0 0 3px var(--agave-glow);"></span>
+            <span id="headerShiftDot" class="hidden w-2 h-2 rounded-full shrink-0" style="background:var(--verde); box-shadow:0 0 0 3px var(--verde-glow);"></span>
             <h1 id="headerDriverName" class="font-display font-bold text-base truncate leading-tight">Panel del Conductor</h1>
           </div>
           <p id="headerDriverSub" class="hidden text-[11px] font-mono leading-tight" style="color:var(--ink-soft);"></p>
         </div>
       </div>
 
-      <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">
+      <button id="installBtn" aria-label="Instalar app" class="btn-lift hidden items-center gap-1.5 px-3 h-9 rounded-full font-display font-semibold text-[12px] shrink-0" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">
         <i data-lucide="download" class="w-3.5 h-3.5"></i>
       </button>
       <button class="theme-toggle-btn btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" aria-label="Cambiar a tema claro/oscuro" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
@@ -497,18 +526,18 @@
       Presiona el botón para que tu combi esté en tiempo real en el mapa.
     </p>
 
-    <div id="supabaseWarning" class="hidden placard p-4 mt-5 max-w-sm w-full text-sm text-center" style="border-color:var(--alerta); background:var(--alerta-bg); color:var(--alerta);">
+    <div id="supabaseWarning" class="hidden placard p-4 mt-5 max-w-sm w-full text-sm text-center" style="border-color:var(--alerta, #FF5C4D); background:var(--alerta-bg, rgba(255,92,77,.12)); color:var(--alerta, #FF5C4D);">
       Supabase no está configurado todavía. Revisa tu archivo de configuración.
     </div>
 
-    <button id="checkpointBtn" class="btn-lift w-full max-w-sm mt-7 py-4 rounded-2xl font-display font-semibold text-[15px] flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
+    <button id="checkpointBtn" class="btn-lift w-full max-w-sm mt-7 py-4 rounded-2xl font-display font-semibold text-[15px] flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">
       <i data-lucide="flag" class="w-4 h-4"></i> <span id="checkpointBtnLabel">Salí de base San Simón</span>
     </button>
-    <p id="checkpointSavedText" class="text-xs mt-2 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.</p>
+    <p id="checkpointSavedText" class="text-xs mt-2 hidden flex items-center gap-1.5" style="color:var(--verde);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.</p>
 
     <div class="grid grid-cols-2 gap-2.5 w-full max-w-sm mt-5">
-      <button id="turnoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Iniciar<br>mi turno</button>
-      <button id="reposoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">Marcar<br>reposo</button>
+      <button id="turnoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">Iniciar<br>mi turno</button>
+      <button id="reposoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--verde) 0%, var(--verde-dark) 100%); color:#052414;">Marcar<br>reposo</button>
     </div>
     <p id="turnoReposoStatus" class="text-[11px] mt-2 text-center hidden" style="color:var(--ink-soft);"></p>
 
@@ -541,17 +570,17 @@
 <div id="panicOverlay">
   <div id="panicSheet">
     <div id="panicStepAsk">
-      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--alerta);"><i data-lucide="siren"></i> ¿Necesitas ayuda?</p>
+      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--alerta, #FF5C4D);"><i data-lucide="siren"></i> ¿Necesitas ayuda?</p>
       <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">
         Se mandará tu ubicación y tu nombre al dueño de la ruta como alerta de emergencia.
       </p>
       <div class="flex gap-2.5 mt-4">
         <button id="panicCancelBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
-        <button id="panicConfirmBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--alerta) 0%, var(--alerta-dark) 100%); color:#fff;">Sí, pedir ayuda</button>
+        <button id="panicConfirmBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--alerta, #FF5C4D) 0%, var(--alerta-dark, #D93E30) 100%); color:#fff;">Sí, pedir ayuda</button>
       </div>
     </div>
     <div id="panicStepSent" class="hidden">
-      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--agave);"><i data-lucide="check-circle-2"></i> Alerta enviada</p>
+      <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--verde);"><i data-lucide="check-circle-2"></i> Alerta enviada</p>
       <p id="panicSentDetail" class="text-[13px] mt-1.5" style="color:var(--ink-soft);">
         Tu ubicación se envió al panel del dueño. Como respaldo, también puedes avisarle directo por WhatsApp:
       </p>
@@ -561,7 +590,7 @@
       </div>
     </div>
     <div id="panicStepError" class="hidden">
-      <p class="font-display font-semibold text-lg" style="color:var(--alerta);">No se pudo enviar la alerta en línea</p>
+      <p class="font-display font-semibold text-lg" style="color:var(--alerta, #FF5C4D);">No se pudo enviar la alerta en línea</p>
       <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Revisa tu conexión. Mientras tanto, avisa directo por WhatsApp con tu ubicación:</p>
       <div class="flex gap-2.5 mt-4">
         <button id="panicErrorCloseBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
@@ -574,7 +603,7 @@
 <!-- SELECCIÓN DE UNIDAD -->
 <div id="unitPickerOverlay">
   <div id="unitPickerSheet">
-    <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="bus"></i> ¿En qué unidad andas hoy?</p>
+    <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--verde);"><i data-lucide="bus"></i> ¿En qué unidad andas hoy?</p>
     <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Elige tu unidad para que el dueño y el checador la vean correcta hoy.</p>
     <div id="unitPickerGrid" class="grid grid-cols-3 gap-2.5 mt-4"></div>
     <p id="unitPickerEmpty" class="hidden text-sm text-center mt-3" style="color:var(--ink-soft);">No hay unidades activas registradas. Avisa al dueño o al administrador.</p>
@@ -591,11 +620,10 @@
       <i id="profilePreviewDefault" data-lucide="user" class="default-icon"></i>
     </div>
     <div class="profile-actions">
-      <!-- MODIFICACIÓN: input sin capture, solo accept="image/*" -->
       <label for="avatarFileInput" class="btn-lift">
-        <i data-lucide="image" class="w-4 h-4"></i> Subir foto (galería o cámara)
+        <i data-lucide="image" class="w-4 h-4"></i> Cambiar foto (desde galería)
       </label>
-      <input type="file" id="avatarFileInput" accept="image/*">
+      <input type="file" id="avatarFileInput" accept="image/*" capture="environment">
       <button id="deleteAvatarBtn" class="btn-lift btn-danger">
         <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar foto actual
       </button>
@@ -604,7 +632,7 @@
   </div>
 </div>
 
-<!-- ===== MODAL DE CONFIRMACIÓN PERSONALIZADO ===== -->
+<!-- ===== MODAL DE CONFIRMACIÓN PERSONALIZADO (para eliminar) ===== -->
 <div id="confirmModalOverlay">
   <div id="confirmModalSheet">
     <h3>⚠️ Eliminar foto</h3>
@@ -617,7 +645,7 @@
 </div>
 
 <script>
-  // ===== LÓGICA DE AVATAR PERSONALIZADO =====
+  // ===== LÓGICA DE AVATAR PERSONALIZADO (sin ventanas nativas) =====
 
   (function() {
     // Elementos principales
@@ -647,6 +675,7 @@
         avatarImg.src = stored;
         avatarImg.style.display = 'block';
         avatarDefault.style.display = 'none';
+        // Actualizar también la vista previa
         profilePreviewImg.src = stored;
         profilePreviewImg.style.display = 'block';
         profilePreviewDefault.style.display = 'none';
@@ -679,6 +708,7 @@
 
     // ===== Abrir modal de perfil =====
     function openProfileModal() {
+      // Sincronizar vista previa
       const stored = localStorage.getItem('driver_avatar');
       if (stored && stored.startsWith('data:image')) {
         profilePreviewImg.src = stored;
@@ -695,6 +725,7 @@
       profileModal.classList.remove('show');
     }
 
+    // ===== Abrir confirmación personalizada =====
     function openConfirmModal() {
       confirmModal.classList.add('show');
     }
@@ -704,13 +735,17 @@
     }
 
     // ===== Eventos =====
+
+    // 1. Clic en el avatar → abrir modal de perfil
     avatarWrapper.addEventListener('click', openProfileModal);
+
+    // 2. Cerrar modal de perfil
     closeProfileBtn.addEventListener('click', closeProfileModal);
     profileModal.addEventListener('click', function(e) {
       if (e.target === profileModal) closeProfileModal();
     });
 
-    // Subir imagen (desde galería o cámara)
+    // 3. Seleccionar archivo de imagen (desde galería)
     fileInput.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -719,33 +754,39 @@
         const dataUrl = ev.target.result;
         saveAvatar(dataUrl);
         closeProfileModal();
-        fileInput.value = ''; // limpiar
+        // Limpiar input para permitir repetir la misma imagen
+        fileInput.value = '';
       };
       reader.readAsDataURL(file);
     });
 
+    // 4. Botón "Eliminar foto actual" → abrir confirmación
     deleteAvatarBtn.addEventListener('click', function() {
-      closeProfileModal();
-      openConfirmModal();
+      closeProfileModal(); // cerramos el modal de perfil
+      openConfirmModal();  // mostramos el de confirmación
     });
 
+    // 5. Confirmar eliminar
     confirmDeleteBtn.addEventListener('click', function() {
-      saveAvatar(null);
+      saveAvatar(null); // elimina
       closeConfirmModal();
     });
 
+    // 6. Cancelar eliminar
     confirmCancelBtn.addEventListener('click', closeConfirmModal);
     confirmModal.addEventListener('click', function(e) {
       if (e.target === confirmModal) closeConfirmModal();
     });
 
+    // 7. Inicializar
     loadAvatar();
 
-    // Simulación de nombre
+    // 8. También actualizar el nombre del conductor (simulación)
+    // (esto normalmente lo haría conductor-logic.js)
     document.getElementById('headerDriverName').textContent = 'Juan Pérez';
   })();
 
-  // ===== Toggles de tema =====
+  // ===== Toggles de tema (los que ya tenías) =====
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';

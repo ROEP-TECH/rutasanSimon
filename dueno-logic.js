@@ -240,6 +240,14 @@ const driverDrawer = document.getElementById('driverDrawer');
 const driverDrawerOverlay = document.getElementById('driverDrawerOverlay');
 const driverDrawerContent = document.getElementById('driverDrawerContent');
 
+// Helpers para mostrar teléfonos de forma segura (evitan inyectar HTML)
+function phoneText(phone) {
+  return String(phone).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+function phoneHref(phone) {
+  return String(phone).replace(/[^\d+]/g, '');
+}
+
 function openDriverDrawer(driverId) {
   const d = lastDrivers.find(x => x.id === driverId);
   if (!d) return;
@@ -296,6 +304,7 @@ function openDriverDrawer(driverId) {
       <div class="min-w-0">
         <p class="font-display font-semibold text-base truncate">${d.name}</p>
         <p class="text-xs font-mono" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
+        ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-xs font-mono flex items-center gap-1" style="color:var(--talavera);"><i data-lucide="phone" class="w-3.5 h-3.5"></i> ${phoneText(d.phone)}</a>` : ''}
       </div>
     </div>
 
@@ -527,6 +536,7 @@ function renderDriversList() {
         <span class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 font-display font-bold text-sm" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
         <div class="min-w-0">
           <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
+          ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-[10px] sm:text-[11px] font-mono truncate flex items-center gap-1" style="color:var(--talavera);" onclick="event.stopPropagation()"><i data-lucide="phone" class="w-3 h-3"></i> ${phoneText(d.phone)}</a>` : ''}
           <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
           <div class="flex flex-wrap items-center gap-1 mt-1">
             <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block" style="background:${routeColor}; color:#08131c;">${routeLabel}</span>

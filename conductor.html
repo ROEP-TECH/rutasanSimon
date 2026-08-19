@@ -38,7 +38,7 @@
 <script type="module" src="conductor-logic.js"></script>
 
 <style>
-  /* ===== TOKENS — mismo lenguaje visual que el Panel del Dueño ===== */
+  /* ===== TOKENS ===== */
   :root{
     --canvas:#0A0E13; --surface:#11161D; --surface-2:#171E27; --surface-3:#1D2530;
     --ink:#EDF1F5; --ink-soft:#8A94A3; --ink-faint:#5C6572;
@@ -53,7 +53,6 @@
     --shadow-md: 0 20px 50px -18px rgba(0,0,0,.65);
   }
 
-  /* ===== TEMA CLARO ===== */
   html[data-theme="light"]{
     color-scheme: light;
     --canvas:#FAF7F0; --surface:#FFFFFF; --surface-2:#F4EEDC; --surface-3:#EDE4C8;
@@ -80,7 +79,6 @@
   .placard{ background:var(--surface); border:1px solid var(--border); border-radius:1.25rem; box-shadow:var(--shadow); transition: box-shadow .3s ease, transform .3s ease; }
   [data-lucide]{ width:18px; height:18px; stroke-width:2.1; }
 
-  /* Fondo ambiental sutil: rejilla + resplandor, igual que el panel del dueño */
   .bg-grid{
     background-image:
       radial-gradient(60rem 30rem at 15% -10%, rgba(63,176,240,.10), transparent 60%),
@@ -179,10 +177,7 @@
   .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#1b1002; box-shadow:var(--shadow); }
   .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#052414; box-shadow:var(--shadow); }
 
-  /* Botón de turno: azul = "toca para iniciar", verde = "en turno, toca para terminar" */
   #turnoBtn.on{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%) !important; color:#052414 !important; }
-
-  /* Botón de reposo: mientras está activo se ve apagado/gris con el conteo, y sigue siendo tocable para cancelar antes de tiempo */
   #reposoBtn.active{ background:var(--surface-2) !important; color:var(--ink-soft) !important; border:1.5px dashed var(--border); }
 
   #pinInput{ letter-spacing:.15em; }
@@ -196,7 +191,7 @@
     *{ transition: none !important; animation: none !important; }
   }
 
-  /* ===== NUEVO: Estilos para el avatar personalizado ===== */
+  /* ===== AVATAR ===== */
   .avatar-wrapper {
     display: flex;
     align-items: center;
@@ -220,14 +215,12 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
   }
   .avatar-wrapper .avatar-default {
     color: var(--ink-soft);
     width: 22px;
     height: 22px;
   }
-  /* Indicador de edición (lápiz) */
   .avatar-wrapper .avatar-hint {
     position: absolute;
     bottom: -4px;
@@ -242,7 +235,7 @@
     justify-content: center;
     font-size: 11px;
     font-weight: bold;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s;
@@ -251,8 +244,8 @@
     opacity: 1;
   }
 
-  /* ===== NUEVO: Modal de personalización de avatar ===== */
-  #avatarModalOverlay {
+  /* ===== MODAL DE PERSONALIZACIÓN ===== */
+  #profileModalOverlay {
     position: fixed;
     inset: 0;
     z-index: 80;
@@ -263,106 +256,175 @@
     justify-content: center;
     padding: 1.5rem;
   }
-  #avatarModalOverlay.show {
+  #profileModalOverlay.show {
     display: flex;
   }
-  #avatarModalSheet {
+  #profileModalSheet {
     width: 100%;
-    max-width: 320px;
+    max-width: 22rem;
     background: var(--surface);
     border-radius: 2rem;
-    padding: 1.5rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+    padding: 1.5rem;
     border: 1px solid var(--border);
     box-shadow: var(--shadow-md);
     text-align: center;
-    animation: modalSlideUp 0.3s ease;
+    animation: modalIn 0.25s ease-out;
   }
-  @keyframes modalSlideUp {
-    from { transform: translateY(30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
   }
-  /* Círculo grande para la foto */
-  .avatar-preview {
-    width: 120px;
-    height: 120px;
+
+  #profileModalSheet .avatar-preview {
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    background: var(--surface-2);
-    border: 3px solid var(--border);
-    margin: 0 auto 1.25rem;
     overflow: hidden;
+    margin: 0.5rem auto 1rem;
+    border: 3px solid var(--border);
+    background: var(--surface-2);
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .avatar-preview img {
+  #profileModalSheet .avatar-preview img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
   }
-  .avatar-preview .avatar-default-big {
+  #profileModalSheet .avatar-preview .default-icon {
     color: var(--ink-soft);
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
   }
-  .avatar-modal-btn {
+  .profile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .profile-actions button,
+  .profile-actions label {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    width: 100%;
-    padding: 0.8rem;
-    border-radius: 1.25rem;
+    padding: 0.75rem;
+    border-radius: 1rem;
     font-family: 'Sora', sans-serif;
     font-weight: 600;
-    font-size: 0.95rem;
-    transition: all 0.2s;
-    border: 1.5px solid var(--border);
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
     background: var(--surface-2);
     color: var(--ink);
-    margin-bottom: 0.6rem;
     cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
   }
-  .avatar-modal-btn:hover {
+  .profile-actions button:hover,
+  .profile-actions label:hover {
     transform: translateY(-1px);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
   }
-  .avatar-modal-btn:active {
+  .profile-actions button:active,
+  .profile-actions label:active {
     transform: scale(0.97);
   }
-  .avatar-modal-btn.primary {
-    background: linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%);
-    border-color: var(--talavera-dark);
-    color: #08131c;
-  }
-  .avatar-modal-btn.danger {
+  .profile-actions .btn-danger {
     background: var(--alerta-bg);
     border-color: var(--alerta);
     color: var(--alerta);
   }
-  .avatar-modal-btn.danger:hover {
+  .profile-actions .btn-danger:hover {
     background: var(--alerta);
     color: #fff;
   }
-  .avatar-modal-btn.secondary {
-    background: var(--surface-3);
+  .profile-actions .btn-close {
+    background: transparent;
+    border-color: transparent;
     color: var(--ink-soft);
-    border-color: var(--border-soft);
+    font-weight: 400;
   }
-  .avatar-modal-btn.secondary:hover {
-    color: var(--ink);
+  .profile-actions .btn-close:hover {
+    background: var(--surface-3);
+    border-color: var(--border);
   }
-  .modal-title {
+
+  /* ===== MODAL DE CONFIRMACIÓN (eliminar) ===== */
+  #confirmModalOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(5,7,10,0.75);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  #confirmModalOverlay.show {
+    display: flex;
+  }
+  #confirmModalSheet {
+    width: 100%;
+    max-width: 18rem;
+    background: var(--surface);
+    border-radius: 1.75rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    text-align: center;
+    animation: modalIn 0.2s ease-out;
+  }
+  #confirmModalSheet h3 {
     font-family: 'Sora', sans-serif;
     font-weight: 700;
     font-size: 1.1rem;
     margin-bottom: 0.5rem;
-    color: var(--ink);
+    color: var(--alerta);
   }
-  .modal-sub {
-    font-size: 0.8rem;
+  #confirmModalSheet p {
+    font-size: 0.9rem;
     color: var(--ink-soft);
     margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+  .confirm-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .confirm-actions button {
+    flex: 1;
+    padding: 0.7rem;
+    border-radius: 1rem;
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .confirm-actions button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .confirm-actions .btn-confirm-danger {
+    background: var(--alerta);
+    border-color: var(--alerta-dark);
+    color: #fff;
+  }
+  .confirm-actions .btn-confirm-danger:hover {
+    background: var(--alerta-dark);
+  }
+  .confirm-actions .btn-confirm-cancel:hover {
+    background: var(--surface-3);
+  }
+
+  /* input file oculto */
+  #avatarFileInput {
+    display: none;
   }
 </style>
 </head>
@@ -392,22 +454,20 @@
 <!-- PANEL PRINCIPAL -->
 <div id="mainScreen" class="hidden min-h-screen flex flex-col items-center pb-24">
 
-  <!-- Barra superior FIJA (sticky) -->
+  <!-- Barra superior -->
   <header class="sticky top-0 z-40 w-full flex justify-center px-4 pt-[env(safe-area-inset-top)]" style="background:color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(10px); border-bottom:1px solid var(--border-soft);">
     <div class="w-full max-w-3xl flex items-center justify-between gap-2 py-2.5">
       <button id="backToPinBtn" aria-label="Volver a poner PIN" class="btn-lift flex items-center justify-center w-9 h-9 rounded-full shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--ink);">
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
       </button>
 
-      <!-- Avatar personalizado + nombre -->
+      <!-- Avatar + nombre -->
       <div class="flex-1 min-w-0 flex items-center gap-2">
-        <!-- Avatar -->
-        <div id="avatarWrapper" class="avatar-wrapper" title="Haz clic para personalizar tu foto">
-          <img id="headerAvatarImg" src="" alt="Avatar" style="display:none;">
-          <i id="headerAvatarDefault" data-lucide="user" class="avatar-default"></i>
+        <div id="avatarWrapper" class="avatar-wrapper" title="Haz clic para personalizar tu perfil">
+          <img id="driverAvatar" src="" alt="Avatar" style="display:none;">
+          <i id="avatarDefaultIcon" data-lucide="user" class="avatar-default"></i>
           <span class="avatar-hint">✎</span>
         </div>
-
         <div class="min-w-0">
           <div id="nameDisplayRow" class="flex items-center gap-1.5 min-w-0">
             <span id="headerShiftDot" class="hidden w-2 h-2 rounded-full shrink-0" style="background:var(--agave); box-shadow:0 0 0 3px var(--agave-glow);"></span>
@@ -429,7 +489,6 @@
 
   <div class="w-full flex flex-col items-center px-4 pt-5 md:pt-8 max-w-3xl">
 
-    <!-- 1) Botón de ubicación -->
     <button id="toggleBtn">
       <span class="pulseDot"><i id="toggleDotIcon" data-lucide="power"></i></span>
       <span id="toggleLabel" class="text-sm">Encender<br>ubicación</span>
@@ -442,20 +501,17 @@
       Supabase no está configurado todavía. Revisa tu archivo de configuración.
     </div>
 
-    <!-- 2) Reportar parada -->
     <button id="checkpointBtn" class="btn-lift w-full max-w-sm mt-7 py-4 rounded-2xl font-display font-semibold text-[15px] flex items-center justify-center gap-2" style="background:linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); color:#052414;">
       <i data-lucide="flag" class="w-4 h-4"></i> <span id="checkpointBtnLabel">Salí de base San Simón</span>
     </button>
     <p id="checkpointSavedText" class="text-xs mt-2 hidden flex items-center gap-1.5" style="color:var(--agave);"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.</p>
 
-    <!-- 3) Turno y reposo -->
     <div class="grid grid-cols-2 gap-2.5 w-full max-w-sm mt-5">
       <button id="turnoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Iniciar<br>mi turno</button>
       <button id="reposoBtn" class="btn-lift py-3 rounded-2xl font-display font-semibold text-[13px] leading-tight" style="background:linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); color:#1b1002;">Marcar<br>reposo</button>
     </div>
     <p id="turnoReposoStatus" class="text-[11px] mt-2 text-center hidden" style="color:var(--ink-soft);"></p>
 
-    <!-- 4) Ramal -->
     <div class="w-full max-w-sm mt-5">
       <p class="text-[11px] uppercase tracking-wide mb-1.5 px-1" style="color:var(--ink-faint);">Tu ramal hoy</p>
       <div class="grid grid-cols-2 gap-2.5">
@@ -464,7 +520,6 @@
       </div>
     </div>
 
-    <!-- 5) Info secundaria -->
     <div class="w-full max-w-sm mt-6 text-[11px] font-mono flex items-center justify-between px-1" style="color:var(--ink-faint);">
       <span id="coordsText">—</span>
       <span id="updatedText">—</span>
@@ -516,7 +571,7 @@
   </div>
 </div>
 
-<!-- SELECCIÓN DE UNIDAD DEL DÍA (aparece justo después de entrar con el PIN) -->
+<!-- SELECCIÓN DE UNIDAD -->
 <div id="unitPickerOverlay">
   <div id="unitPickerSheet">
     <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="bus"></i> ¿En qué unidad andas hoy?</p>
@@ -527,193 +582,182 @@
   </div>
 </div>
 
-<!-- ===== NUEVO: MODAL DE PERSONALIZACIÓN DE AVATAR ===== -->
-<div id="avatarModalOverlay">
-  <div id="avatarModalSheet">
-    <p class="modal-title">📸 Personalización de usuario</p>
-    <p class="modal-sub">Elige una foto desde tu galería</p>
-
-    <!-- Vista previa grande -->
-    <div class="avatar-preview" id="avatarPreview">
-      <img id="modalAvatarImg" src="" alt="Foto de perfil" style="display:none;">
-      <i id="modalAvatarDefault" data-lucide="user" class="avatar-default-big"></i>
+<!-- ===== MODAL DE PERSONALIZACIÓN DE PERFIL ===== -->
+<div id="profileModalOverlay">
+  <div id="profileModalSheet">
+    <h2 class="font-display font-bold text-lg">Personalización de usuario</h2>
+    <div class="avatar-preview" id="profilePreview">
+      <img id="profilePreviewImg" src="" alt="Vista previa" style="display:none;">
+      <i id="profilePreviewDefault" data-lucide="user" class="default-icon"></i>
     </div>
-
-    <!-- Botones -->
-    <button id="modalUploadBtn" class="avatar-modal-btn primary">
-      <i data-lucide="upload" class="w-4 h-4"></i> Subir foto
-    </button>
-    <button id="modalDeleteBtn" class="avatar-modal-btn danger" style="display:none;">
-      <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar foto actual
-    </button>
-    <button id="modalCloseBtn" class="avatar-modal-btn secondary">
-      <i data-lucide="x" class="w-4 h-4"></i> Cerrar
-    </button>
-
-    <!-- Input oculto para seleccionar archivo -->
-    <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+    <div class="profile-actions">
+      <label for="avatarFileInput" class="btn-lift">
+        <i data-lucide="image" class="w-4 h-4"></i> Cambiar foto (desde galería)
+      </label>
+      <input type="file" id="avatarFileInput" accept="image/*" capture="environment">
+      <button id="deleteAvatarBtn" class="btn-lift btn-danger">
+        <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar foto actual
+      </button>
+      <button id="closeProfileModalBtn" class="btn-lift btn-close">Cerrar</button>
+    </div>
   </div>
 </div>
 
-<!-- ===== SCRIPTS ===== -->
+<!-- ===== MODAL DE CONFIRMACIÓN PERSONALIZADO (para eliminar) ===== -->
+<div id="confirmModalOverlay">
+  <div id="confirmModalSheet">
+    <h3>⚠️ Eliminar foto</h3>
+    <p>¿Estás seguro de que quieres eliminar tu foto de perfil actual?</p>
+    <div class="confirm-actions">
+      <button id="confirmCancelBtn" class="btn-confirm-cancel">Cancelar</button>
+      <button id="confirmDeleteBtn" class="btn-confirm-danger">Eliminar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  // ============================================================
-  // 1. LOG DE AVATAR (cargar/guardar en localStorage)
-  // ============================================================
-  const AVATAR_STORAGE_KEY = 'driver_avatar_base64';
+  // ===== LÓGICA DE AVATAR PERSONALIZADO (sin ventanas nativas) =====
 
-  function loadAvatarData() {
-    const stored = localStorage.getItem(AVATAR_STORAGE_KEY);
-    return stored && stored.trim() !== '' ? stored : null;
-  }
+  (function() {
+    // Elementos principales
+    const avatarWrapper = document.getElementById('avatarWrapper');
+    const avatarImg = document.getElementById('driverAvatar');
+    const avatarDefault = document.getElementById('avatarDefaultIcon');
 
-  function saveAvatarData(base64) {
-    if (base64 && base64.trim() !== '') {
-      localStorage.setItem(AVATAR_STORAGE_KEY, base64.trim());
-    } else {
-      localStorage.removeItem(AVATAR_STORAGE_KEY);
-    }
-  }
+    // Modales
+    const profileModal = document.getElementById('profileModalOverlay');
+    const confirmModal = document.getElementById('confirmModalOverlay');
 
-  // ============================================================
-  // 2. ACTUALIZAR TODAS LAS VISTAS DEL AVATAR
-  // ============================================================
-  function updateAllAvatars() {
-    const base64 = loadAvatarData();
-    // Elementos
-    const headerImg = document.getElementById('headerAvatarImg');
-    const headerDefault = document.getElementById('headerAvatarDefault');
-    const modalImg = document.getElementById('modalAvatarImg');
-    const modalDefault = document.getElementById('modalAvatarDefault');
-    const deleteBtn = document.getElementById('modalDeleteBtn');
+    // Vista previa en el modal de perfil
+    const profilePreviewImg = document.getElementById('profilePreviewImg');
+    const profilePreviewDefault = document.getElementById('profilePreviewDefault');
 
-    if (base64) {
-      // Header
-      headerImg.src = base64;
-      headerImg.style.display = 'block';
-      headerDefault.style.display = 'none';
-      // Modal
-      modalImg.src = base64;
-      modalImg.style.display = 'block';
-      modalDefault.style.display = 'none';
-      // Mostrar botón eliminar
-      deleteBtn.style.display = 'flex';
-    } else {
-      // Header
-      headerImg.style.display = 'none';
-      headerDefault.style.display = 'block';
-      // Modal
-      modalImg.style.display = 'none';
-      modalDefault.style.display = 'block';
-      // Ocultar botón eliminar
-      deleteBtn.style.display = 'none';
-    }
-  }
+    // Botones
+    const closeProfileBtn = document.getElementById('closeProfileModalBtn');
+    const deleteAvatarBtn = document.getElementById('deleteAvatarBtn');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+    const fileInput = document.getElementById('avatarFileInput');
 
-  // ============================================================
-  // 3. MODAL DE PERSONALIZACIÓN
-  // ============================================================
-  const avatarModal = document.getElementById('avatarModalOverlay');
-  const avatarWrapper = document.getElementById('avatarWrapper');
-  const modalCloseBtn = document.getElementById('modalCloseBtn');
-  const modalUploadBtn = document.getElementById('modalUploadBtn');
-  const modalDeleteBtn = document.getElementById('modalDeleteBtn');
-  const fileInput = document.getElementById('avatarFileInput');
-
-  // Abrir modal al hacer clic en el avatar
-  avatarWrapper.addEventListener('click', function() {
-    // Actualizar la vista previa del modal antes de mostrarlo
-    const base64 = loadAvatarData();
-    const modalImg = document.getElementById('modalAvatarImg');
-    const modalDefault = document.getElementById('modalAvatarDefault');
-    if (base64) {
-      modalImg.src = base64;
-      modalImg.style.display = 'block';
-      modalDefault.style.display = 'none';
-      modalDeleteBtn.style.display = 'flex';
-    } else {
-      modalImg.style.display = 'none';
-      modalDefault.style.display = 'block';
-      modalDeleteBtn.style.display = 'none';
-    }
-    avatarModal.classList.add('show');
-  });
-
-  // Cerrar modal
-  function closeModal() {
-    avatarModal.classList.remove('show');
-  }
-  modalCloseBtn.addEventListener('click', closeModal);
-  avatarModal.addEventListener('click', function(e) {
-    if (e.target === avatarModal) closeModal();
-  });
-
-  // ============================================================
-  // 4. SUBIR FOTO DESDE GALERÍA
-  // ============================================================
-  modalUploadBtn.addEventListener('click', function() {
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Validar que sea imagen
-    if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona una imagen válida.');
-      fileInput.value = '';
-      return;
+    // ===== Cargar avatar guardado =====
+    function loadAvatar() {
+      const stored = localStorage.getItem('driver_avatar');
+      if (stored && stored.startsWith('data:image')) {
+        avatarImg.src = stored;
+        avatarImg.style.display = 'block';
+        avatarDefault.style.display = 'none';
+        // Actualizar también la vista previa
+        profilePreviewImg.src = stored;
+        profilePreviewImg.style.display = 'block';
+        profilePreviewDefault.style.display = 'none';
+      } else {
+        avatarImg.style.display = 'none';
+        avatarDefault.style.display = 'block';
+        profilePreviewImg.style.display = 'none';
+        profilePreviewDefault.style.display = 'block';
+      }
     }
 
-    // Limitar tamaño (opcional, 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      alert('La imagen es demasiado grande (máx. 2 MB).');
-      fileInput.value = '';
-      return;
+    // ===== Guardar avatar (base64) =====
+    function saveAvatar(dataUrl) {
+      if (dataUrl && dataUrl.startsWith('data:image')) {
+        localStorage.setItem('driver_avatar', dataUrl);
+        avatarImg.src = dataUrl;
+        avatarImg.style.display = 'block';
+        avatarDefault.style.display = 'none';
+        profilePreviewImg.src = dataUrl;
+        profilePreviewImg.style.display = 'block';
+        profilePreviewDefault.style.display = 'none';
+      } else {
+        localStorage.removeItem('driver_avatar');
+        avatarImg.style.display = 'none';
+        avatarDefault.style.display = 'block';
+        profilePreviewImg.style.display = 'none';
+        profilePreviewDefault.style.display = 'block';
+      }
     }
 
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      const base64 = ev.target.result;
-      // Guardar en localStorage
-      saveAvatarData(base64);
-      // Actualizar todas las vistas
-      updateAllAvatars();
-      // Limpiar input para permitir subir la misma imagen de nuevo
-      fileInput.value = '';
-      // Cerrar modal (opcional)
-      // closeModal(); // si prefieres que se cierre automáticamente
-    };
-    reader.onerror = function() {
-      alert('Error al leer la imagen. Intenta de nuevo.');
-      fileInput.value = '';
-    };
-    reader.readAsDataURL(file);
-  });
-
-  // ============================================================
-  // 5. ELIMINAR FOTO
-  // ============================================================
-  modalDeleteBtn.addEventListener('click', function() {
-    if (confirm('¿Seguro que quieres eliminar tu foto de perfil?')) {
-      saveAvatarData(null);
-      updateAllAvatars();
-      // Cerrar modal
-      closeModal();
+    // ===== Abrir modal de perfil =====
+    function openProfileModal() {
+      // Sincronizar vista previa
+      const stored = localStorage.getItem('driver_avatar');
+      if (stored && stored.startsWith('data:image')) {
+        profilePreviewImg.src = stored;
+        profilePreviewImg.style.display = 'block';
+        profilePreviewDefault.style.display = 'none';
+      } else {
+        profilePreviewImg.style.display = 'none';
+        profilePreviewDefault.style.display = 'block';
+      }
+      profileModal.classList.add('show');
     }
-  });
 
-  // ============================================================
-  // 6. INICIALIZAR
-  // ============================================================
-  document.addEventListener('DOMContentLoaded', function() {
-    updateAllAvatars();
-  });
+    function closeProfileModal() {
+      profileModal.classList.remove('show');
+    }
 
-  // ============================================================
-  // 7. THEME TOGGLES (ya estaban)
-  // ============================================================
+    // ===== Abrir confirmación personalizada =====
+    function openConfirmModal() {
+      confirmModal.classList.add('show');
+    }
+
+    function closeConfirmModal() {
+      confirmModal.classList.remove('show');
+    }
+
+    // ===== Eventos =====
+
+    // 1. Clic en el avatar → abrir modal de perfil
+    avatarWrapper.addEventListener('click', openProfileModal);
+
+    // 2. Cerrar modal de perfil
+    closeProfileBtn.addEventListener('click', closeProfileModal);
+    profileModal.addEventListener('click', function(e) {
+      if (e.target === profileModal) closeProfileModal();
+    });
+
+    // 3. Seleccionar archivo de imagen (desde galería)
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const dataUrl = ev.target.result;
+        saveAvatar(dataUrl);
+        closeProfileModal();
+        // Limpiar input para permitir repetir la misma imagen
+        fileInput.value = '';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 4. Botón "Eliminar foto actual" → abrir confirmación
+    deleteAvatarBtn.addEventListener('click', function() {
+      closeProfileModal(); // cerramos el modal de perfil
+      openConfirmModal();  // mostramos el de confirmación
+    });
+
+    // 5. Confirmar eliminar
+    confirmDeleteBtn.addEventListener('click', function() {
+      saveAvatar(null); // elimina
+      closeConfirmModal();
+    });
+
+    // 6. Cancelar eliminar
+    confirmCancelBtn.addEventListener('click', closeConfirmModal);
+    confirmModal.addEventListener('click', function(e) {
+      if (e.target === confirmModal) closeConfirmModal();
+    });
+
+    // 7. Inicializar
+    loadAvatar();
+
+    // 8. También actualizar el nombre del conductor (simulación)
+    // (esto normalmente lo haría conductor-logic.js)
+    document.getElementById('headerDriverName').textContent = 'Juan Pérez';
+  })();
+
+  // ===== Toggles de tema (los que ya tenías) =====
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
@@ -722,6 +766,5 @@
     });
   });
 </script>
-
 </body>
 </html>

@@ -145,6 +145,31 @@
 
   #installBtn.show{ display:flex; }
 
+  #unitPickerOverlay{
+    position:fixed; inset:0; z-index:65;
+    background:rgba(5,7,10,.68); backdrop-filter: blur(2px);
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #unitPickerOverlay.show{ display:flex; }
+  #unitPickerSheet{
+    width:100%; max-width:28rem;
+    background:var(--surface); border-radius:1.75rem 1.75rem 0 0;
+    padding:1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    border-top:1px solid var(--border);
+    box-shadow: 0 -20px 50px -18px rgba(0,0,0,.7);
+    max-height:80vh; overflow-y:auto;
+  }
+  .unit-pick-btn{
+    border:1.5px solid var(--border); background:var(--surface-2); color:var(--ink);
+    border-radius:1rem; padding:.9rem .5rem; font-family:'Sora', sans-serif; font-weight:700; font-size:15px;
+    display:flex; flex-direction:column; align-items:center; gap:.25rem;
+    transition: all .2s ease;
+  }
+  .unit-pick-btn:hover{ border-color:var(--talavera); transform: translateY(-1px); }
+  .unit-pick-btn:active{ transform: scale(.97); }
+  .unit-pick-btn.current{ background: linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); border-color:var(--talavera-dark); color:#08131c; box-shadow:var(--shadow); }
+  .unit-pick-btn .unit-pick-tag{ font-size:10px; font-weight:600; letter-spacing:.02em; opacity:.8; }
+
   .ramal-btn{
     border:1.5px solid var(--border); background:var(--surface-2); color:var(--ink-soft);
     border-radius:1rem; padding:.8rem; font-family:'Sora', sans-serif; font-weight:600; font-size:14px;
@@ -314,6 +339,17 @@
         <a id="panicErrorWhatsappLink" href="#" target="_blank" rel="noopener" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-1.5" style="background:#25D366; color:#062712;"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- SELECCIÓN DE UNIDAD DEL DÍA (aparece justo después de entrar con el PIN) -->
+<div id="unitPickerOverlay">
+  <div id="unitPickerSheet">
+    <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--talavera);"><i data-lucide="bus"></i> ¿En qué unidad andas hoy?</p>
+    <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Elige tu unidad para que el dueño y el checador la vean correcta hoy.</p>
+    <div id="unitPickerGrid" class="grid grid-cols-3 gap-2.5 mt-4"></div>
+    <p id="unitPickerEmpty" class="hidden text-sm text-center mt-3" style="color:var(--ink-soft);">No hay unidades activas registradas. Avisa al dueño o al administrador.</p>
+    <button id="unitPickerSkipBtn" class="btn-lift w-full mt-4 py-3 rounded-2xl font-display font-semibold text-sm placard hidden">Continuar sin elegir</button>
   </div>
 </div>
 

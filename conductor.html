@@ -591,10 +591,11 @@
       <i id="profilePreviewDefault" data-lucide="user" class="default-icon"></i>
     </div>
     <div class="profile-actions">
+      <!-- MODIFICACIÓN: input sin capture, solo accept="image/*" -->
       <label for="avatarFileInput" class="btn-lift">
-        <i data-lucide="image" class="w-4 h-4"></i> Cambiar foto (desde galería)
+        <i data-lucide="image" class="w-4 h-4"></i> Subir foto (galería o cámara)
       </label>
-      <input type="file" id="avatarFileInput" accept="image/*" capture="environment">
+      <input type="file" id="avatarFileInput" accept="image/*">
       <button id="deleteAvatarBtn" class="btn-lift btn-danger">
         <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar foto actual
       </button>
@@ -603,7 +604,7 @@
   </div>
 </div>
 
-<!-- ===== MODAL DE CONFIRMACIÓN PERSONALIZADO (para eliminar) ===== -->
+<!-- ===== MODAL DE CONFIRMACIÓN PERSONALIZADO ===== -->
 <div id="confirmModalOverlay">
   <div id="confirmModalSheet">
     <h3>⚠️ Eliminar foto</h3>
@@ -616,7 +617,7 @@
 </div>
 
 <script>
-  // ===== LÓGICA DE AVATAR PERSONALIZADO (sin ventanas nativas) =====
+  // ===== LÓGICA DE AVATAR PERSONALIZADO =====
 
   (function() {
     // Elementos principales
@@ -646,7 +647,6 @@
         avatarImg.src = stored;
         avatarImg.style.display = 'block';
         avatarDefault.style.display = 'none';
-        // Actualizar también la vista previa
         profilePreviewImg.src = stored;
         profilePreviewImg.style.display = 'block';
         profilePreviewDefault.style.display = 'none';
@@ -679,7 +679,6 @@
 
     // ===== Abrir modal de perfil =====
     function openProfileModal() {
-      // Sincronizar vista previa
       const stored = localStorage.getItem('driver_avatar');
       if (stored && stored.startsWith('data:image')) {
         profilePreviewImg.src = stored;
@@ -696,7 +695,6 @@
       profileModal.classList.remove('show');
     }
 
-    // ===== Abrir confirmación personalizada =====
     function openConfirmModal() {
       confirmModal.classList.add('show');
     }
@@ -706,17 +704,13 @@
     }
 
     // ===== Eventos =====
-
-    // 1. Clic en el avatar → abrir modal de perfil
     avatarWrapper.addEventListener('click', openProfileModal);
-
-    // 2. Cerrar modal de perfil
     closeProfileBtn.addEventListener('click', closeProfileModal);
     profileModal.addEventListener('click', function(e) {
       if (e.target === profileModal) closeProfileModal();
     });
 
-    // 3. Seleccionar archivo de imagen (desde galería)
+    // Subir imagen (desde galería o cámara)
     fileInput.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -725,39 +719,33 @@
         const dataUrl = ev.target.result;
         saveAvatar(dataUrl);
         closeProfileModal();
-        // Limpiar input para permitir repetir la misma imagen
-        fileInput.value = '';
+        fileInput.value = ''; // limpiar
       };
       reader.readAsDataURL(file);
     });
 
-    // 4. Botón "Eliminar foto actual" → abrir confirmación
     deleteAvatarBtn.addEventListener('click', function() {
-      closeProfileModal(); // cerramos el modal de perfil
-      openConfirmModal();  // mostramos el de confirmación
+      closeProfileModal();
+      openConfirmModal();
     });
 
-    // 5. Confirmar eliminar
     confirmDeleteBtn.addEventListener('click', function() {
-      saveAvatar(null); // elimina
+      saveAvatar(null);
       closeConfirmModal();
     });
 
-    // 6. Cancelar eliminar
     confirmCancelBtn.addEventListener('click', closeConfirmModal);
     confirmModal.addEventListener('click', function(e) {
       if (e.target === confirmModal) closeConfirmModal();
     });
 
-    // 7. Inicializar
     loadAvatar();
 
-    // 8. También actualizar el nombre del conductor (simulación)
-    // (esto normalmente lo haría conductor-logic.js)
+    // Simulación de nombre
     document.getElementById('headerDriverName').textContent = 'Juan Pérez';
   })();
 
-  // ===== Toggles de tema (los que ya tenías) =====
+  // ===== Toggles de tema =====
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';

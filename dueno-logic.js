@@ -447,7 +447,7 @@ setInterval(() => {
 async function renderDriversAndMap() {
   if (!currentOwner) return;
 
-  const isAdmin = currentOwner.role === 'admin';
+  const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
 
   let query = supabase
     .from('drivers')
@@ -629,10 +629,16 @@ function renderFleetPulse() {
 async function renderRouteEvents() {
   if (!currentOwner) return;
 
-  const isAdmin = currentOwner.role === 'admin';
+  const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
+  // OJO: el filtro .eq('driver.owner_id', ...) sobre una relación embebida
+  // SIN "!inner" no restringe las filas de route_events — solo filtra lo
+  // que se muestra dentro del objeto "driver" anidado. Por eso antes le
+  // llegaban a TODOS los dueños los avisos de TODOS los conductores, sin
+  // importar la unidad. Con "!inner" el filtro sí aplica sobre las filas
+  // de route_events (deja fuera las que no son de este dueño).
   let query = supabase
     .from('route_events')
-    .select('*, driver:driver_id ( name, owner_id )')
+    .select('*, driver:driver_id!inner ( name, owner_id )')
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -673,7 +679,7 @@ async function renderRouteEvents() {
 async function renderChecadorEvents() {
   if (!currentOwner) return;
 
-  const isAdmin = currentOwner.role === 'admin';
+  const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -738,7 +744,7 @@ async function renderChecadorEvents() {
 async function renderAlerts() {
   if (!currentOwner) return;
 
-  const isAdmin = currentOwner.role === 'admin';
+  const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
   let query = supabase
     .from('panic_alerts')
     .select('*, driver:driver_id ( name )')

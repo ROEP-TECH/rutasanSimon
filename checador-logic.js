@@ -137,7 +137,7 @@ on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logou
 async function loadUnits() {
   const { data: drivers, error } = await supabase
     .from('drivers')
-    .select('id, name, route, owner_id, unit:unit_id ( id, unit_number )')
+    .select('id, name, phone, route, owner_id, unit:unit_id ( id, unit_number )')
     .order('unit_id', { ascending: true });
 
   if (error) {
@@ -171,6 +171,7 @@ function renderUnitsGrid(drivers) {
     unitsById[uid].drivers.push({
       driverId: d.id,
       driverName: d.name || 'Conductor',
+      driverPhone: d.phone || '',
       route: d.route || '',
       ownerId: d.owner_id,
       unitId: uid,
@@ -225,7 +226,10 @@ function openUnitDriversOverlay(unitId) {
   unitDriversTitle.innerHTML = `<i data-lucide="users"></i> Unidad ${unit.unit_number}`;
   unitDriversList.innerHTML = unit.drivers.map((d, idx) => `
     <button class="driver-row" data-driver-idx="${idx}">
-      <span class="driver-name truncate min-w-0 flex-1">${escapeAttr(d.driverName)}</span>
+      <span class="min-w-0 flex-1 text-left">
+        <span class="driver-name truncate block">${escapeAttr(d.driverName)}</span>
+        ${d.driverPhone ? `<span class="text-[11px] font-mono block" style="color:var(--ink-soft);">${escapeAttr(d.driverPhone)}</span>` : ''}
+      </span>
       ${d.route ? `<span class="route-badge shrink-0" style="background:color-mix(in srgb, ${routeColor(d.route)} 18%, var(--paper-2)); color:${routeColor(d.route)};">${routeLabel(d.route)}</span>` : ''}
     </button>
   `).join('');
@@ -544,6 +548,7 @@ function renderDriversList() {
         <span class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 font-display font-bold text-sm" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
         <div class="min-w-0">
           <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
+          ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-[10px] sm:text-[11px] font-mono truncate flex items-center gap-1" style="color:var(--talavera);" onclick="event.stopPropagation()"><i data-lucide="phone" class="w-3 h-3"></i> ${escapeAttr(d.phone)}</a>` : ''}
           <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
           <div class="flex flex-wrap items-center gap-1 mt-1">
             <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block" style="background:${rColor}; color:#08131c;">${rLabel}</span>
@@ -612,6 +617,11 @@ const driverDrawer = document.getElementById('driverDrawer');
 const driverDrawerOverlay = document.getElementById('driverDrawerOverlay');
 const driverDrawerContent = document.getElementById('driverDrawerContent');
 
+// Helper para el href de un teléfono (solo dígitos y "+")
+function phoneHref(phone) {
+  return String(phone).replace(/[^\d+]/g, '');
+}
+
 function openDriverDrawer(driverId) {
   const d = lastDrivers.find((x) => x.id === driverId);
   if (!d || !driverDrawerContent) return;
@@ -645,6 +655,7 @@ function openDriverDrawer(driverId) {
       <div class="min-w-0">
         <p class="font-display font-semibold text-base truncate">${d.name}</p>
         <p class="text-xs font-mono" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
+        ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-xs font-mono flex items-center gap-1" style="color:var(--talavera);"><i data-lucide="phone" class="w-3.5 h-3.5"></i> ${escapeAttr(d.phone)}</a>` : ''}
       </div>
     </div>
 

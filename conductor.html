@@ -886,76 +886,10 @@
 
 <!-- ===== INDICADOR DE VERSIÓN EN EL FOOTER ===== -->
 <div id="versionFooter">v1.0</div>
+<script src="cambiarVersion.js"></script>
+
 
 <script>
-  // ============================================================
-  // ===== SISTEMA DE VERSIONES =====
-  // ============================================================
-  (function() {
-    // --- Versión actual y changelog ---
-    const APP_VERSION = '1.0.1';
-    const CHANGELOG = [
-      '✨ Nuevo saludo personalizado al iniciar sesión.',
-      '🖼️ Avatar personalizable con foto de perfil.',
-      '🚌 Mejoras en la interfaz y animaciones.',
-      '🐛 Corrección de errores menores.'
-    ];
-
-    // --- Elementos ---
-    const updateOverlay = document.getElementById('updateOverlay');
-    const updateVersionDisplay = document.getElementById('updateVersionDisplay');
-    const updateChangelog = document.getElementById('updateChangelog');
-    const applyBtn = document.getElementById('applyUpdateBtn');
-    const skipBtn = document.getElementById('skipUpdateBtn');
-    const versionFooter = document.getElementById('versionFooter');
-
-    // Mostrar la versión en el footer
-    versionFooter.textContent = 'v' + APP_VERSION;
-
-    function showUpdateModal() {
-      updateVersionDisplay.textContent = 'v' + APP_VERSION;
-      const list = updateChangelog.querySelector('ul');
-      list.innerHTML = '';
-      CHANGELOG.forEach(item => {
-        const li = document.createElement('li');
-        li.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i> ${item}`;
-        list.appendChild(li);
-      });
-      if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-      }
-      updateOverlay.classList.add('show');
-    }
-
-    function applyUpdate() {
-      localStorage.setItem('app_version', APP_VERSION);
-      window.location.reload(true);
-    }
-
-    function skipUpdate() {
-      updateOverlay.classList.remove('show');
-      localStorage.setItem('app_version', APP_VERSION);
-    }
-
-    function checkVersion() {
-      const savedVersion = localStorage.getItem('app_version');
-      // Si no hay versión guardada o es diferente, mostrar el modal
-      if (savedVersion !== APP_VERSION) {
-        showUpdateModal();
-      }
-    }
-
-    applyBtn.addEventListener('click', applyUpdate);
-    skipBtn.addEventListener('click', skipUpdate);
-    updateOverlay.addEventListener('click', function(e) {
-      if (e.target === updateOverlay) {
-        skipUpdate();
-      }
-    });
-
-    // Ejecutar al cargar
-    setTimeout(checkVersion, 300);
-  })();
 
 
   // ============================================================

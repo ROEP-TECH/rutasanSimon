@@ -427,7 +427,7 @@
     display: none;
   }
 
-  /* ===== MODAL DE SALUDO (bienvenida) ===== */
+  /* ===== MODAL DE SALUDO ===== */
   #welcomeOverlay {
     position: fixed;
     inset: 0;
@@ -523,12 +523,12 @@
     color: var(--ink);
   }
 
-  /* ===== NUEVO: MODAL DE ACTUALIZACIÓN (VERSIONES) ===== */
+  /* ===== MODAL DE ACTUALIZACIÓN (VERSIONES) ===== */
   #updateOverlay {
     position: fixed;
     inset: 0;
-    z-index: 110; /* Por encima del saludo */
-    background: rgba(5,7,10,0.75);
+    z-index: 110;
+    background: rgba(5,7,10,0.8);
     backdrop-filter: blur(8px);
     display: none;
     align-items: center;
@@ -647,6 +647,20 @@
     background: var(--surface-2);
     border-color: var(--border);
     color: var(--ink);
+  }
+
+  /* Indicador de versión en el footer */
+  #versionFooter {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-faint);
+    opacity: 0.4;
+    z-index: 20;
+    pointer-events: none;
   }
 </style>
 </head>
@@ -850,7 +864,7 @@
   </div>
 </div>
 
-<!-- ===== NUEVO: MODAL DE ACTUALIZACIÓN (VERSIONES) ===== -->
+<!-- ===== MODAL DE ACTUALIZACIÓN (VERSIONES) ===== -->
 <div id="updateOverlay">
   <div id="updateCard">
     <div class="update-icon">
@@ -860,7 +874,7 @@
     <span class="update-version" id="updateVersionDisplay">v1.0</span>
     <div class="update-changelog" id="updateChangelog">
       <ul>
-        <!-- Los items se generan desde JS -->
+        <!-- Generado desde JS -->
       </ul>
     </div>
     <div class="update-actions">
@@ -870,13 +884,16 @@
   </div>
 </div>
 
+<!-- ===== INDICADOR DE VERSIÓN EN EL FOOTER ===== -->
+<div id="versionFooter">v1.0</div>
+
 <script>
   // ============================================================
-  // ===== NUEVO: SISTEMA DE VERSIONES (v1.0) =====
+  // ===== SISTEMA DE VERSIONES =====
   // ============================================================
   (function() {
-    // --- Configuración de la versión actual ---
-    const APP_VERSION = '1.0'; // Cambia esto en cada nueva versión
+    // --- Versión actual y changelog ---
+    const APP_VERSION = '1.0';
     const CHANGELOG = [
       '✨ Nuevo saludo personalizado al iniciar sesión.',
       '🖼️ Avatar personalizable con foto de perfil.',
@@ -884,19 +901,19 @@
       '🐛 Corrección de errores menores.'
     ];
 
-    // --- Elementos DOM ---
+    // --- Elementos ---
     const updateOverlay = document.getElementById('updateOverlay');
     const updateVersionDisplay = document.getElementById('updateVersionDisplay');
     const updateChangelog = document.getElementById('updateChangelog');
     const applyBtn = document.getElementById('applyUpdateBtn');
     const skipBtn = document.getElementById('skipUpdateBtn');
+    const versionFooter = document.getElementById('versionFooter');
 
-    // --- Función para mostrar el modal de actualización ---
+    // Mostrar la versión en el footer
+    versionFooter.textContent = 'v' + APP_VERSION;
+
     function showUpdateModal() {
-      // Llenar la versión
-      updateVersionDisplay.textContent = `v${APP_VERSION}`;
-
-      // Llenar el changelog
+      updateVersionDisplay.textContent = 'v' + APP_VERSION;
       const list = updateChangelog.querySelector('ul');
       list.innerHTML = '';
       CHANGELOG.forEach(item => {
@@ -904,53 +921,39 @@
         li.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i> ${item}`;
         list.appendChild(li);
       });
-
-      // Renderizar íconos de Lucide (si ya está cargado)
       if (typeof lucide !== 'undefined') {
         lucide.createIcons();
       }
-
-      // Mostrar el overlay
       updateOverlay.classList.add('show');
     }
 
-    // --- Función para aplicar la actualización ---
     function applyUpdate() {
-      // Guardar la nueva versión en localStorage
       localStorage.setItem('app_version', APP_VERSION);
-      // Forzar recarga (limpia caché y obtiene la nueva versión)
       window.location.reload(true);
     }
 
-    // --- Función para omitir (cierra el modal) ---
     function skipUpdate() {
       updateOverlay.classList.remove('show');
-      // Guardar la versión actual para no molestar en esta sesión
       localStorage.setItem('app_version', APP_VERSION);
     }
 
-    // --- Detectar si hay nueva versión ---
     function checkVersion() {
       const savedVersion = localStorage.getItem('app_version');
-      // Si no hay versión guardada o la versión guardada es diferente a la actual
+      // Si no hay versión guardada o es diferente, mostrar el modal
       if (savedVersion !== APP_VERSION) {
         showUpdateModal();
       }
     }
 
-    // --- Eventos ---
     applyBtn.addEventListener('click', applyUpdate);
     skipBtn.addEventListener('click', skipUpdate);
-
-    // También cerrar si el usuario hace clic fuera del modal (solo si está visible)
     updateOverlay.addEventListener('click', function(e) {
       if (e.target === updateOverlay) {
         skipUpdate();
       }
     });
 
-    // --- Ejecutar la comprobación al cargar ---
-    // Esperar un momento para que los demás scripts carguen y Lucide esté listo
+    // Ejecutar al cargar
     setTimeout(checkVersion, 300);
   })();
 
@@ -1063,7 +1066,7 @@
 
 
   // ============================================================
-  // ===== LÓGICA DEL SALUDO PERSONALIZADO =====
+  // ===== LÓGICA DEL SALUDO =====
   // ============================================================
   (function() {
     const mainScreen = document.getElementById('mainScreen');

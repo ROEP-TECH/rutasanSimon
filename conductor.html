@@ -427,7 +427,7 @@
     display: none;
   }
 
-  /* ===== MODAL DE SALUDO ===== */
+  /* ===== MODAL DE SALUDO (bienvenida) ===== */
   #welcomeOverlay {
     position: fixed;
     inset: 0;
@@ -851,15 +851,15 @@
   </div>
 </div>
 
-<!-- ===== MODAL DE SALUDO ===== -->
+<!-- ===== MODAL DE SALUDO (bienvenida) ===== -->
 <div id="welcomeOverlay">
   <div id="welcomeCard">
     <div class="welcome-icon">
       <i data-lucide="bus"></i>
     </div>
-    <h2 id="welcomeGreeting">¡Buen día, <span id="welcomeName">Conductor</span>!</h2>
-    <p>Tu ruta está lista para comenzar.<br>¡Que tengas un excelente servicio!</p>
-    <button class="btn-close-welcome" id="closeWelcomeBtn">Continuar</button>
+    <h2 id="welcomeGreeting">¡Qué gusto verte, <span id="welcomeName">Conductor</span>!</h2>
+    <p>Tu ruta te espera.<br>Que tengas un buen día de servicio.</p>
+    <button class="btn-close-welcome" id="closeWelcomeBtn">¡Vamos!</button>
     <div class="welcome-sub">Ruta San Simón · R-18</div>
   </div>
 </div>
@@ -890,8 +890,6 @@
 
 
 <script>
-
-
   // ============================================================
   // ===== LÓGICA DE AVATAR PERSONALIZADO =====
   // ============================================================
@@ -1000,18 +998,31 @@
 
 
   // ============================================================
-  // ===== LÓGICA DEL SALUDO =====
+  // ===== LÓGICA DEL SALUDO (con sessionStorage) =====
   // ============================================================
   (function() {
     const mainScreen = document.getElementById('mainScreen');
     const welcomeOverlay = document.getElementById('welcomeOverlay');
     const welcomeName = document.getElementById('welcomeName');
     const closeBtn = document.getElementById('closeWelcomeBtn');
+    const pinSubmit = document.getElementById('pinSubmit');
+
     let welcomeTimeout = null;
     let isWelcomeShown = false;
 
+    // Clave para sessionStorage (se borra al cerrar la pestaña)
+    const SESSION_FLAG = 'rss_welcome_shown';
+
+    // Al hacer clic en "Entrar" (login con PIN), borramos la bandera para que el saludo se muestre
+    pinSubmit.addEventListener('click', function() {
+      sessionStorage.removeItem(SESSION_FLAG);
+    });
+
     function showWelcome() {
+      // Si ya se mostró en esta sesión (recarga), no mostrar de nuevo
+      if (sessionStorage.getItem(SESSION_FLAG)) return;
       if (isWelcomeShown) return;
+
       const nameEl = document.getElementById('headerDriverName');
       let nombre = nameEl ? nameEl.textContent.trim() : 'Conductor';
       if (nombre === 'Panel del Conductor') nombre = 'Conductor';
@@ -1020,6 +1031,9 @@
       welcomeOverlay.classList.remove('fade-out');
       welcomeOverlay.classList.add('show');
       isWelcomeShown = true;
+
+      // Marcar como mostrado en esta sesión
+      sessionStorage.setItem(SESSION_FLAG, 'true');
 
       if (welcomeTimeout) clearTimeout(welcomeTimeout);
       welcomeTimeout = setTimeout(function() {
@@ -1045,6 +1059,7 @@
       if (e.target === welcomeOverlay) closeWelcome();
     });
 
+    // Observamos cuando mainScreen se vuelve visible
     const observer = new MutationObserver(function(mutations) {
       mutations.forEach(function(mutation) {
         if (mutation.attributeName === 'class') {
@@ -1056,6 +1071,10 @@
     });
     observer.observe(mainScreen, { attributes: true });
 
+    // Si por casualidad ya está visible (ej. auto-login al recargar)
+    // y la bandera no está, no se mostrará porque la bandera ya fue puesta
+    // al mostrarlo la primera vez. Si la bandera no existe (primer acceso),
+    // se mostrará.
     if (!mainScreen.classList.contains('hidden')) {
       setTimeout(showWelcome, 300);
     }

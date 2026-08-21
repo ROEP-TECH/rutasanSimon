@@ -133,12 +133,13 @@ function initMap() {
   mapInitialized = true; // Marcamos que ya se creó
 }
 
-// ----- VISIBILIDAD CRUZADA: conductor "de favor" en una unidad que no es la suya -----
-// Un dueño debe ver a un conductor si (a) es su conductor fijo, O (b) el
-// conductor trae hoy una unidad que sí es del dueño (le está haciendo el
-// favor de manejarla). Así, mientras dure el favor, aparece en AMBOS paneles.
-function ownerCanSee(currentOwnerId, driverOwnerId, unitOwnerId) {
-  return driverOwnerId === currentOwnerId || unitOwnerId === currentOwnerId;
+// ----- VISIBILIDAD: la define la UNIDAD, no el conductor -----
+// Un dueño ve a un conductor si y solo si la unidad que trae elegida en
+// ese momento es una unidad suya (units.owner_id). Ya no importa quién
+// dio de alta al conductor (drivers.owner_id) — ese campo queda solo para
+// organizar el panel de Admin, no para decidir qué ve cada dueño.
+function ownerCanSee(currentOwnerId, unitOwnerId) {
+  return unitOwnerId === currentOwnerId;
 }
 
 function routeLabelFor(route) {
@@ -457,12 +458,10 @@ async function renderDriversAndMap() {
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
 
-  // OJO: ya no filtramos por owner_id aquí abajo con .eq() — un conductor
-  // puede traer hoy una unidad que no es de su dueño fijo (le está haciendo
-  // el favor a otro dueño), y en ese caso también debe aparecerle a ESE
-  // dueño. Por eso pedimos también unit.owner_id y filtramos en JS con
-  // ownerCanSee(), que deja pasar al conductor si su dueño fijo coincide
-  // O si el dueño de la unidad que trae hoy coincide.
+  // OJO: ya no filtramos por owner_id aquí abajo con .eq() — la visibilidad
+  // ya no depende del dueño fijo del conductor, depende de qué unidad trae
+  // elegida ahora mismo. Por eso pedimos unit.owner_id y filtramos en JS
+  // con ownerCanSee(), que solo compara contra el dueño de esa unidad.
   let query = supabase
     .from('drivers')
     .select(`
@@ -480,7 +479,7 @@ async function renderDriversAndMap() {
 
   lastDrivers = isAdmin
     ? (drivers || [])
-    : (drivers || []).filter(d => ownerCanSee(currentOwner.id, d.owner_id, d.unit?.owner_id));
+    : (drivers || []).filter(d => ownerCanSee(currentOwner.id, d.unit?.owner_id));
   await loadVueltasToday();
   renderDriversList();
   renderFleetPulse();
@@ -642,11 +641,9 @@ async function renderRouteEvents() {
   if (!currentOwner) return;
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
-  // Igual que en renderDriversAndMap: ya no filtramos con .eq() en la BD,
-  // porque el filtro debe considerar tanto al dueño fijo del conductor
-  // como al dueño real de la unidad que trae hoy (favor entre dueños).
-  // Por eso traemos también driver.unit.owner_id y filtramos con
-  // ownerCanSee() del lado del cliente.
+  // Igual que en renderDriversAndMap: la visibilidad depende de la unidad
+  // que trae el conductor, no de quién lo dio de alta. Traemos
+  // driver.unit.owner_id y filtramos con ownerCanSee() del lado del cliente.
   let query = supabase
     .from('route_events')
     .select('*, driver:driver_id!inner ( name, owner_id, unit:unit_id ( owner_id ) )')
@@ -658,7 +655,7 @@ async function renderRouteEvents() {
 
   const events = isAdmin
     ? (rawEvents || [])
-    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.driver?.owner_id, ev.driver?.unit?.owner_id));
+    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.driver?.unit?.owner_id));
 
   lastRouteEvents = events || [];
 
@@ -695,10 +692,9 @@ async function renderChecadorEvents() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  // owner_id en esta tabla es el dueño FIJO del conductor al momento de la
-  // checada; unit.owner_id es el dueño real de la unidad que traía ese día.
-  // Con ownerCanSee() dejamos pasar cualquiera de los dos, para que el
-  // favor entre dueños también se vea en el panel del dueño de la unidad.
+  // Esta tabla ya guardaba unit_id — solo necesitamos también unit.owner_id
+  // para filtrar por el dueño real de la unidad de ese momento, no por el
+  // owner_id (dueño fijo del conductor) que trae guardado la fila.
   let query = supabase
     .from('checador_events')
     .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number, owner_id ), checador:checador_id ( name )')
@@ -711,7 +707,7 @@ async function renderChecadorEvents() {
 
   const events = isAdmin
     ? rawEvents
-    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.owner_id, ev.unit?.owner_id));
+    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.unit?.owner_id));
 
   lastChecadorEvents = events || [];
 
@@ -760,10 +756,9 @@ async function renderAlerts() {
   if (!currentOwner) return;
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
-  // owner_id es el dueño fijo del conductor; unit.owner_id es el dueño real
-  // de la unidad que traía en el momento de la alerta (ver unit_id agregado
-  // en sendPanicAlert, conductor-logic.js). ownerCanSee() deja pasar a
-  // cualquiera de los dos dueños.
+  // Filtramos por unit.owner_id: el dueño real de la unidad que traía el
+  // conductor al momento de la alerta (ver unit_id agregado en
+  // sendPanicAlert, conductor-logic.js), no por el dueño fijo del conductor.
   let query = supabase
     .from('panic_alerts')
     .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number, owner_id )')
@@ -775,7 +770,7 @@ async function renderAlerts() {
 
   const alerts = isAdmin
     ? rawAlerts
-    : (rawAlerts || []).filter(a => ownerCanSee(currentOwner.id, a.owner_id, a.unit?.owner_id));
+    : (rawAlerts || []).filter(a => ownerCanSee(currentOwner.id, a.unit?.owner_id));
 
   const list = document.getElementById('alertsList');
   const empty = document.getElementById('alertsEmpty');

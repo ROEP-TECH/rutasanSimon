@@ -103,8 +103,17 @@
 
   #pinInput{ letter-spacing:.15em; }
 
-  /* Cuadrícula de unidades */
-  #unitsGrid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:.75rem; }
+  /* Cuadrícula de unidades — columnas fijas de tamaño cómodo (no fracciones),
+     así en pantallas anchas simplemente caben más columnas en vez de que las
+     3 de siempre se estiren o queden amontonadas en una franja angosta. */
+  #unitsGrid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap:.75rem;
+  }
+  @media (min-width: 640px){
+    #unitsGrid{ grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap:.85rem; }
+  }
   .unit-btn{
     aspect-ratio: 1 / 1; border-radius:1.25rem; border:1.5px solid var(--border);
     background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -353,7 +362,7 @@
         <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="alert-triangle" class="w-4 h-4"></i></span>
         <span class="font-display font-semibold text-sm uppercase tracking-wide" style="color:var(--ink-soft);">Reportar incidencia</span>
       </div>
-      <div id="unitsGrid" class="max-w-sm"></div>
+      <div id="unitsGrid"></div>
       <p id="unitsEmpty" class="hidden text-sm text-center mt-4" style="color:var(--ink-soft);">Todavía no hay unidades dadas de alta.</p>
       <p class="text-[11px] mt-4" style="color:var(--ink-soft);">Toca la unidad, elige al conductor que le tocaba hoy y marca si llegó tarde o no se presentó.</p>
 
@@ -480,6 +489,5 @@
     });
   });
 </script>
-
 </body>
 </html>

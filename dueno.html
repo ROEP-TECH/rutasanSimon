@@ -422,17 +422,6 @@
   </div>
   <div id="driverDrawerContent" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"></div>
 </aside>
-
-<script>
-  document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      try{ localStorage.setItem('rss_theme', next); }catch(e){}
-    });
-  });
-</script>
-<script src="cambiarVersion.js"></script>
 <!-- ===== MODAL DE ACTUALIZACIÓN (VERSIONES) ===== -->
 <div id="updateOverlay">
   <div id="updateCard">
@@ -453,8 +442,19 @@
   </div>
 </div>
 
-<!-- ===== INDICADOR DE VERSIÓN EN EL FOOTER ===== -->
+<!-- ===== INDICADOR DE VERSIÓN EN EL FOOTER (opcional) ===== -->
 <div id="versionFooter">v1.0</div>
+<script>
+  document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try{ localStorage.setItem('rss_theme', next); }catch(e){}
+    });
+  });
+</script>
+<script src="cambiarVersion.js"></script>
+
 
 
 </body>

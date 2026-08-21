@@ -133,6 +133,29 @@ on(switchChecadorBtn, 'click', goToPinScreen, 'switchChecadorBtn - opcional, nor
 on(document.getElementById('logoutBtnDesktop'), 'click', goToPinScreen, 'logoutBtnDesktop');
 on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logoutBtnMobileNav');
 
+// ----- SESIÓN GUARDADA: no volver a pedir PIN al recargar la página -----
+// Mientras no le den "Cerrar sesión" explícitamente, si ya inició sesión
+// una vez en este dispositivo, se le vuelve a meter directo sin pedirle
+// el PIN otra vez.
+async function tryAutoLogin() {
+  const savedId = localStorage.getItem('rss_checador_id');
+  if (!savedId) return;
+
+  const { data: checador, error } = await supabase
+    .from('checadores')
+    .select('*')
+    .eq('id', savedId)
+    .single();
+
+  if (checador && !error) {
+    unlock(checador);
+  } else {
+    // El id guardado ya no sirve (p.ej. lo borraron desde el admin):
+    // limpiamos para que la próxima vez sí pida PIN normal.
+    localStorage.removeItem('rss_checador_id');
+  }
+}
+
 // ----- CARGAR UNIDADES (todos los conductores, de todos los dueños) -----
 async function loadUnits() {
   const { data: drivers, error } = await supabase
@@ -988,3 +1011,5 @@ async function downloadDaySummaryPdf() {
 
   doc.save(`vueltas-checador-${todayFile}.pdf`);
 }
+
+tryAutoLogin();

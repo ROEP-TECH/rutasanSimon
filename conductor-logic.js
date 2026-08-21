@@ -697,6 +697,7 @@ async function sendPanicAlert(lat, lng) {
     .insert({
       driver_id: currentDriver.id,
       owner_id: currentDriver.owner_id,
+      unit_id: currentDriver.unit_id || null,
       lat: lat,
       lng: lng,
       status: 'pendiente'

@@ -64,3 +64,77 @@
     // Ejecutar al cargar
     setTimeout(checkVersion, 300);
   })();
+
+
+   
+  // ============================================================
+  // ===== SISTEMA DE VERSIONES DUEÑO =====
+  // ============================================================
+  (function() {
+    // --- Versión actual y changelog ---
+    const APP_VERSION = '0.1'; // Cambia esto en cada nueva versión
+    const CHANGELOG = [
+      '✨ Panel del dueño completamente funcional.',
+      '📍 Mapa en vivo con ubicación de conductores.',
+      '📊 KPIs en tiempo real (en ruta, puntualidad, avisos, alertas).',
+      '🔔 Sistema de alertas de ayuda con sonido.',
+      '🔄 Sistema de versiones integrado.'
+    ];
+
+    // --- Elementos ---
+    const updateOverlay = document.getElementById('updateOverlay');
+    const updateVersionDisplay = document.getElementById('updateVersionDisplay');
+    const updateChangelog = document.getElementById('updateChangelog');
+    const applyBtn = document.getElementById('applyUpdateBtn');
+    const skipBtn = document.getElementById('skipUpdateBtn');
+    const versionFooter = document.getElementById('versionFooter');
+
+    // Mostrar la versión en el footer
+    if (versionFooter) {
+      versionFooter.textContent = 'v' + APP_VERSION;
+    }
+
+    function showUpdateModal() {
+      updateVersionDisplay.textContent = 'v' + APP_VERSION;
+      const list = updateChangelog.querySelector('ul');
+      list.innerHTML = '';
+      CHANGELOG.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i> ${item}`;
+        list.appendChild(li);
+      });
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+      updateOverlay.classList.add('show');
+    }
+
+    function applyUpdate() {
+      localStorage.setItem('app_version', APP_VERSION);
+      window.location.reload(true);
+    }
+
+    function skipUpdate() {
+      updateOverlay.classList.remove('show');
+      localStorage.setItem('app_version', APP_VERSION);
+    }
+
+    function checkVersion() {
+      const savedVersion = localStorage.getItem('app_version');
+      // Si no hay versión guardada o es diferente, mostrar el modal
+      if (savedVersion !== APP_VERSION) {
+        showUpdateModal();
+      }
+    }
+
+    applyBtn.addEventListener('click', applyUpdate);
+    skipBtn.addEventListener('click', skipUpdate);
+    updateOverlay.addEventListener('click', function(e) {
+      if (e.target === updateOverlay) {
+        skipUpdate();
+      }
+    });
+
+    // Ejecutar al cargar
+    setTimeout(checkVersion, 300);
+  })();

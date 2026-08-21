@@ -468,7 +468,8 @@ async function renderDriversAndMap() {
       *,
       unit:unit_id ( unit_number, owner_id ),
       live_location:live_locations ( lat, lng, heading, speed, updated_at )
-    `);
+    `)
+    .eq('active', true);
 
   const { data: drivers, error } = await query;
 

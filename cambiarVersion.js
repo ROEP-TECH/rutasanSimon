@@ -3,7 +3,7 @@
   // ============================================================
   (function() {
     // --- Versión actual y changelog ---
-    const APP_VERSION = '1.0.';
+    const APP_VERSION = '0.2';
     const CHANGELOG = [
       'Corrección de errores menores.',
       'Se agrego personalizacion al conductor.'

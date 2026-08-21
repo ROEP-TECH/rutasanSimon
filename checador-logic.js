@@ -133,46 +133,26 @@ on(switchChecadorBtn, 'click', goToPinScreen, 'switchChecadorBtn - opcional, nor
 on(document.getElementById('logoutBtnDesktop'), 'click', goToPinScreen, 'logoutBtnDesktop');
 on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logoutBtnMobileNav');
 
-// ----- SESIÓN GUARDADA: no volver a pedir PIN al recargar la página -----
-// Mientras no le den "Cerrar sesión" explícitamente, si ya inició sesión
-// una vez en este dispositivo, se le vuelve a meter directo sin pedirle
-// el PIN otra vez.
-async function tryAutoLogin() {
-  const savedId = localStorage.getItem('rss_checador_id');
-  if (!savedId) return;
-
-  const { data: checador, error } = await supabase
-    .from('checadores')
-    .select('*')
-    .eq('id', savedId)
-    .single();
-
-  if (checador && !error) {
-    unlock(checador);
-  } else {
-    // El id guardado ya no sirve (p.ej. lo borraron desde el admin):
-    // limpiamos para que la próxima vez sí pida PIN normal.
-    localStorage.removeItem('rss_checador_id');
-  }
-}
-
-// ----- CARGAR UNIDADES (todos los conductores, de todos los dueños) -----
+// ----- CARGAR UNIDADES (todas las unidades activas, de todos los dueños) -----
+// Antes esto se armaba solo a partir de "drivers" (uniendo con unit_id), así
+// que cualquier unidad sin conductor asignado nunca aparecía en la cuadrícula.
+// Ahora se parte de la tabla "units" (igual que el panel de admin) y luego se
+// le "cuelgan" los conductores que le tocan, si es que tiene.
 async function loadUnits() {
-  const { data: drivers, error } = await supabase
-    .from('drivers')
-    .select('id, name, phone, route, owner_id, active, unit:unit_id ( id, unit_number )')
-    .eq('active', true)
-    .order('unit_id', { ascending: true });
+  const [{ data: units, error: unitsError }, { data: drivers, error: driversError }] = await Promise.all([
+    supabase.from('units').select('id, unit_number, active').order('unit_number', { ascending: true }),
+    supabase.from('drivers').select('id, name, phone, route, owner_id, unit_id'),
+  ]);
 
-  if (error) {
-    console.error('Error cargando unidades:', error);
+  if (unitsError || driversError) {
+    console.error('Error cargando unidades:', unitsError || driversError);
     unitsEmpty.textContent = 'No se pudieron cargar las unidades. Revisa tu conexión.';
     unitsEmpty.classList.remove('hidden');
     unitsGrid.innerHTML = '';
     return;
   }
 
-  renderUnitsGrid(drivers || []);
+  renderUnitsGrid(units || [], drivers || []);
 }
 
 function routeColor(route) {
@@ -183,43 +163,50 @@ function routeLabel(route) {
   return route === 'capilla' ? 'Por Capilla' : (route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal');
 }
 
-// Agrupa a los conductores por unidad, porque una misma unidad puede
+// Parte de TODAS las unidades activas (aunque no tengan conductor asignado
+// todavía) y les cuelga los conductores que les tocan. Una misma unidad puede
 // tener más de un conductor (turnos / días distintos).
-function renderUnitsGrid(drivers) {
-  const withUnit = drivers.filter((d) => d.unit && d.unit.unit_number != null);
-
+function renderUnitsGrid(units, drivers) {
   unitsById = {};
-  withUnit.forEach((d) => {
-    const uid = d.unit.id;
-    if (!unitsById[uid]) unitsById[uid] = { unit_number: d.unit.unit_number, drivers: [] };
-    unitsById[uid].drivers.push({
-      driverId: d.id,
-      driverName: d.name || 'Conductor',
-      driverPhone: d.phone || '',
-      route: d.route || '',
-      ownerId: d.owner_id,
-      unitId: uid,
-      unitNumber: d.unit.unit_number,
+
+  units
+    .filter((u) => u.active !== false && u.unit_number != null)
+    .forEach((u) => {
+      unitsById[u.id] = { unit_number: u.unit_number, drivers: [] };
     });
-  });
 
-  const units = Object.entries(unitsById).map(([id, val]) => ({ id, ...val }));
-  units.sort((a, b) => Number(a.unit_number) - Number(b.unit_number));
+  drivers
+    .filter((d) => d.unit_id && unitsById[d.unit_id])
+    .forEach((d) => {
+      unitsById[d.unit_id].drivers.push({
+        driverId: d.id,
+        driverName: d.name || 'Conductor',
+        driverPhone: d.phone || '',
+        route: d.route || '',
+        ownerId: d.owner_id,
+        unitId: d.unit_id,
+        unitNumber: unitsById[d.unit_id].unit_number,
+      });
+    });
 
-  if (units.length === 0) {
+  const unitsList = Object.entries(unitsById).map(([id, val]) => ({ id, ...val }));
+  unitsList.sort((a, b) => Number(a.unit_number) - Number(b.unit_number));
+
+  if (unitsList.length === 0) {
     unitsEmpty.classList.remove('hidden');
     unitsGrid.innerHTML = '';
     return;
   }
   unitsEmpty.classList.add('hidden');
 
-  unitsGrid.innerHTML = units.map((u) => {
+  unitsGrid.innerHTML = unitsList.map((u) => {
     const dotColor = u.drivers.length === 1 ? routeColor(u.drivers[0].route) : 'var(--ink-soft)';
     return `
       <button class="unit-btn" data-unit-id="${u.id}">
         <span class="unit-number">${u.unit_number}</span>
         <span class="unit-dot" style="background:${dotColor};"></span>
         ${u.drivers.length > 1 ? `<span class="text-[10px] font-display font-semibold" style="color:var(--ink-soft);">${u.drivers.length} choferes</span>` : ''}
+        ${u.drivers.length === 0 ? `<span class="text-[10px] font-display font-semibold" style="color:var(--ink-faint);">Sin conductor</span>` : ''}
       </button>
     `;
   }).join('');
@@ -228,11 +215,12 @@ function renderUnitsGrid(drivers) {
   if (window.lucide) lucide.createIcons();
 }
 
-// ----- REALTIME: refrescar la cuadrícula si cambian conductores/ramales -----
+// ----- REALTIME: refrescar la cuadrícula si cambian conductores/ramales/unidades -----
 function initRealtime() {
   driversChannel = supabase
     .channel('checador-drivers-channel')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => loadUnits())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'units' }, () => loadUnits())
     .subscribe();
 }
 
@@ -248,6 +236,14 @@ function openUnitDriversOverlay(unitId) {
   if (!unit) return;
 
   unitDriversTitle.innerHTML = `<i data-lucide="users"></i> Unidad ${unit.unit_number}`;
+
+  if (unit.drivers.length === 0) {
+    unitDriversList.innerHTML = `<p class="text-sm text-center py-2" style="color:var(--ink-soft);">Esta unidad todavía no tiene conductor asignado.</p>`;
+    unitDriversOverlay.classList.add('show');
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
   unitDriversList.innerHTML = unit.drivers.map((d, idx) => `
     <button class="driver-row" data-driver-idx="${idx}">
       <span class="min-w-0 flex-1 text-left">
@@ -1011,5 +1007,3 @@ async function downloadDaySummaryPdf() {
 
   doc.save(`vueltas-checador-${todayFile}.pdf`);
 }
-
-tryAutoLogin();

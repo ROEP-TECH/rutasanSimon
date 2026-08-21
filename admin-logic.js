@@ -390,13 +390,30 @@ function renderDriversTable(drivers) {
       </td>
       <td class="whitespace-nowrap">
         <button class="btn btn-ghost text-xs driver-save-btn">Guardar</button>
+        <button class="btn btn-ghost text-xs driver-unassign-btn" ${d.unit_id ? '' : 'disabled style="opacity:.4;cursor:not-allowed;"'}>Quitar de unidad</button>
         <button class="btn btn-danger text-xs driver-delete-btn">Borrar</button>
       </td>
     </tr>
   `).join('');
 
   tbody.querySelectorAll('.driver-save-btn').forEach((btn) => btn.addEventListener('click', (e) => saveDriver(e)));
+  tbody.querySelectorAll('.driver-unassign-btn').forEach((btn) => btn.addEventListener('click', (e) => unassignDriver(e)));
   tbody.querySelectorAll('.driver-delete-btn').forEach((btn) => btn.addEventListener('click', (e) => deleteDriver(e)));
+}
+
+// Quita al conductor de su unidad actual con un solo click, sin tocar
+// el resto de sus datos y sin desactivarlo — sigue existiendo y activo
+// en el sistema, listo para reasignarse a otra unidad cuando haga falta.
+async function unassignDriver(e) {
+  const tr = e.target.closest('tr');
+  const id = tr.dataset.id;
+
+  const ok = await safeCall(
+    supabase.from('drivers').update({ unit_id: null }).eq('id', id),
+    'Conductor quitado de su unidad.',
+    'Error al quitar conductor de la unidad'
+  );
+  if (ok) await loadDrivers();
 }
 
 async function saveDriver(e) {

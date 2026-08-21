@@ -133,6 +133,14 @@ function initMap() {
   mapInitialized = true; // Marcamos que ya se creó
 }
 
+// ----- VISIBILIDAD CRUZADA: conductor "de favor" en una unidad que no es la suya -----
+// Un dueño debe ver a un conductor si (a) es su conductor fijo, O (b) el
+// conductor trae hoy una unidad que sí es del dueño (le está haciendo el
+// favor de manejarla). Así, mientras dure el favor, aparece en AMBOS paneles.
+function ownerCanSee(currentOwnerId, driverOwnerId, unitOwnerId) {
+  return driverOwnerId === currentOwnerId || unitOwnerId === currentOwnerId;
+}
+
 function routeLabelFor(route) {
   return route === 'capilla' ? 'Por Capilla' : route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal';
 }
@@ -449,17 +457,19 @@ async function renderDriversAndMap() {
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
 
+  // OJO: ya no filtramos por owner_id aquí abajo con .eq() — un conductor
+  // puede traer hoy una unidad que no es de su dueño fijo (le está haciendo
+  // el favor a otro dueño), y en ese caso también debe aparecerle a ESE
+  // dueño. Por eso pedimos también unit.owner_id y filtramos en JS con
+  // ownerCanSee(), que deja pasar al conductor si su dueño fijo coincide
+  // O si el dueño de la unidad que trae hoy coincide.
   let query = supabase
     .from('drivers')
     .select(`
       *,
-      unit:unit_id ( unit_number ),
+      unit:unit_id ( unit_number, owner_id ),
       live_location:live_locations ( lat, lng, heading, speed, updated_at )
     `);
-
-  if (!isAdmin) {
-    query = query.eq('owner_id', currentOwner.id);
-  }
 
   const { data: drivers, error } = await query;
 
@@ -468,7 +478,9 @@ async function renderDriversAndMap() {
     return;
   }
 
-  lastDrivers = drivers || [];
+  lastDrivers = isAdmin
+    ? (drivers || [])
+    : (drivers || []).filter(d => ownerCanSee(currentOwner.id, d.owner_id, d.unit?.owner_id));
   await loadVueltasToday();
   renderDriversList();
   renderFleetPulse();
@@ -630,24 +642,23 @@ async function renderRouteEvents() {
   if (!currentOwner) return;
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
-  // OJO: el filtro .eq('driver.owner_id', ...) sobre una relación embebida
-  // SIN "!inner" no restringe las filas de route_events — solo filtra lo
-  // que se muestra dentro del objeto "driver" anidado. Por eso antes le
-  // llegaban a TODOS los dueños los avisos de TODOS los conductores, sin
-  // importar la unidad. Con "!inner" el filtro sí aplica sobre las filas
-  // de route_events (deja fuera las que no son de este dueño).
+  // Igual que en renderDriversAndMap: ya no filtramos con .eq() en la BD,
+  // porque el filtro debe considerar tanto al dueño fijo del conductor
+  // como al dueño real de la unidad que trae hoy (favor entre dueños).
+  // Por eso traemos también driver.unit.owner_id y filtramos con
+  // ownerCanSee() del lado del cliente.
   let query = supabase
     .from('route_events')
-    .select('*, driver:driver_id!inner ( name, owner_id )')
+    .select('*, driver:driver_id!inner ( name, owner_id, unit:unit_id ( owner_id ) )')
     .order('created_at', { ascending: false })
     .limit(20);
 
-  if (!isAdmin) {
-    query = query.eq('driver.owner_id', currentOwner.id);
-  }
-
-  const { data: events, error } = await query;
+  const { data: rawEvents, error } = await query;
   if (error) { console.error('Error cargando route_events:', error); return; }
+
+  const events = isAdmin
+    ? (rawEvents || [])
+    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.driver?.owner_id, ev.driver?.unit?.owner_id));
 
   lastRouteEvents = events || [];
 
@@ -684,19 +695,23 @@ async function renderChecadorEvents() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
+  // owner_id en esta tabla es el dueño FIJO del conductor al momento de la
+  // checada; unit.owner_id es el dueño real de la unidad que traía ese día.
+  // Con ownerCanSee() dejamos pasar cualquiera de los dos, para que el
+  // favor entre dueños también se vea en el panel del dueño de la unidad.
   let query = supabase
     .from('checador_events')
-    .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number ), checador:checador_id ( name )')
+    .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number, owner_id ), checador:checador_id ( name )')
     .gte('created_at', startOfDay.toISOString())
     .order('created_at', { ascending: false })
     .limit(50);
 
-  if (!isAdmin) {
-    query = query.eq('owner_id', currentOwner.id);
-  }
-
-  const { data: events, error } = await query;
+  const { data: rawEvents, error } = await query;
   if (error) { console.error('Error cargando checador_events:', error); return; }
+
+  const events = isAdmin
+    ? rawEvents
+    : (rawEvents || []).filter(ev => ownerCanSee(currentOwner.id, ev.owner_id, ev.unit?.owner_id));
 
   lastChecadorEvents = events || [];
 
@@ -745,18 +760,22 @@ async function renderAlerts() {
   if (!currentOwner) return;
 
   const isAdmin = currentOwner.role === 'admin' || currentOwner.role === 'developer';
+  // owner_id es el dueño fijo del conductor; unit.owner_id es el dueño real
+  // de la unidad que traía en el momento de la alerta (ver unit_id agregado
+  // en sendPanicAlert, conductor-logic.js). ownerCanSee() deja pasar a
+  // cualquiera de los dos dueños.
   let query = supabase
     .from('panic_alerts')
-    .select('*, driver:driver_id ( name )')
+    .select('*, driver:driver_id ( name ), unit:unit_id ( unit_number, owner_id )')
     .order('created_at', { ascending: false })
     .limit(20);
 
-  if (!isAdmin) {
-    query = query.eq('owner_id', currentOwner.id);
-  }
-
-  const { data: alerts, error } = await query;
+  const { data: rawAlerts, error } = await query;
   if (error) { console.error('Error cargando panic_alerts:', error); return; }
+
+  const alerts = isAdmin
+    ? rawAlerts
+    : (rawAlerts || []).filter(a => ownerCanSee(currentOwner.id, a.owner_id, a.unit?.owner_id));
 
   const list = document.getElementById('alertsList');
   const empty = document.getElementById('alertsEmpty');

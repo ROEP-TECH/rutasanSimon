@@ -282,8 +282,10 @@
      en grande, además del registro rápido que ya usaba desde el celular. -->
 <div id="mainScreen" class="hidden min-h-screen">
 
-  <!-- SIDEBAR (escritorio) -->
-  <aside class="hidden md:flex md:w-60 shrink-0 flex-col gap-1 p-4 border-r" style="border-color:var(--border); background:var(--surface);">
+  <!-- SIDEBAR (escritorio) — sticky para que se quede fijo en pantalla aunque
+       se baje en el contenido de la derecha; scrollea solo si sus propios
+       links no caben en el alto de la ventana. -->
+  <aside class="hidden md:flex md:w-60 md:sticky md:top-0 md:h-screen md:overflow-y-auto shrink-0 flex-col gap-1 p-4 border-r" style="border-color:var(--border); background:var(--surface);">
     <div class="flex items-center gap-2.5 px-2 py-2 mb-4">
       <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;"><i data-lucide="clipboard-check" class="w-4.5 h-4.5"></i></div>
       <div class="min-w-0">

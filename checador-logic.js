@@ -137,7 +137,8 @@ on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logou
 async function loadUnits() {
   const { data: drivers, error } = await supabase
     .from('drivers')
-    .select('id, name, phone, route, owner_id, unit:unit_id ( id, unit_number )')
+    .select('id, name, phone, route, owner_id, active, unit:unit_id ( id, unit_number )')
+    .eq('active', true)
     .order('unit_id', { ascending: true });
 
   if (error) {

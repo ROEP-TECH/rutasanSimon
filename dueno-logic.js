@@ -58,12 +58,22 @@ async function tryLogin() {
     return;
   }
 
-  currentUser = data.user;
+  enterApp(data.user, owner);
+}
+
+// ----- ENTRAR AL PANEL (login manual o sesión ya guardada) -----
+function enterApp(user, owner) {
+  currentUser = user;
   currentOwner = owner;
   loginError.classList.add('hidden');
   loginScreen.classList.add('hidden');
   mainScreen.classList.remove('hidden');
   mainScreen.classList.add('md:flex');
+
+  // Mostrar el nombre del dueño en el panel, para que quede claro que
+  // ese panel es suyo.
+  const displayName = owner.full_name || owner.name || user.email || 'Dueño';
+  document.querySelectorAll('.owner-name-text').forEach((el) => { el.textContent = displayName; });
 
   // Inicializar mapa SOLO si no se ha creado antes
   if (!mapInitialized) {
@@ -77,6 +87,25 @@ async function tryLogin() {
   // el panel cerrado o el celular bloqueado (requiere que el panel esté
   // instalado desde Chrome). Ver push-notifications.js para la config.
   initPushNotifications('dueno', owner.id, owner.name || currentUser.email);
+}
+
+// ----- SESIÓN GUARDADA: no volver a pedir correo/contraseña al recargar -----
+// Supabase Auth ya guarda el token de sesión solo; aquí nada más
+// revisamos si sigue siendo válido y, si sí, entramos directo sin
+// mostrar la pantalla de login.
+async function tryAutoLogin() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || !session.user) return; // no hay sesión guardada: se queda en login
+
+  const { data: owner, error: ownerError } = await supabase
+    .from('owners')
+    .select('*')
+    .eq('id', session.user.id)
+    .single();
+
+  if (ownerError || !owner) return; // token válido pero no es cuenta de dueño: se queda en login
+
+  enterApp(session.user, owner);
 }
 
 // ----- CIERRE DE SESIÓN -----
@@ -97,6 +126,7 @@ async function doLogout() {
   lastVueltas = {};
   closeDriverDrawer();
   closeMobileNav();
+  document.querySelectorAll('.owner-name-text').forEach((el) => { el.textContent = '—'; });
   mainScreen.classList.add('hidden');
   mainScreen.classList.remove('md:flex');
   loginScreen.classList.remove('hidden');
@@ -930,3 +960,5 @@ if (navLinks.length) {
 
   sections.forEach(sec => observer.observe(sec));
 }
+
+tryAutoLogin();

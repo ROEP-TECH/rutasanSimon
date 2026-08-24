@@ -790,19 +790,17 @@
     <div id="panicStepSent" class="hidden">
       <p class="font-display font-semibold text-lg flex items-center gap-2" style="color:var(--agave);"><i data-lucide="check-circle-2"></i> Alerta enviada</p>
       <p id="panicSentDetail" class="text-[13px] mt-1.5" style="color:var(--ink-soft);">
-        Tu ubicación se envió al panel del dueño. Como respaldo, también puedes avisarle directo por WhatsApp:
+        Tu ubicación se envió al panel del dueño y del checador.
       </p>
       <div class="flex gap-2.5 mt-4">
-        <button id="panicCloseBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
-        <a id="panicWhatsappLink" href="#" target="_blank" rel="noopener" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-1.5" style="background:#25D366; color:#062712;"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>
+        <button id="panicCloseBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
       </div>
     </div>
     <div id="panicStepError" class="hidden">
-      <p class="font-display font-semibold text-lg" style="color:var(--alerta);">No se pudo enviar la alerta en línea</p>
-      <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Revisa tu conexión. Mientras tanto, avisa directo por WhatsApp con tu ubicación:</p>
+      <p class="font-display font-semibold text-lg" style="color:var(--alerta);">Sin señal por el momento</p>
+      <p class="text-[13px] mt-1.5" style="color:var(--ink-soft);">Tu alerta se sigue intentando enviar sola cada pocos segundos hasta que salga.</p>
       <div class="flex gap-2.5 mt-4">
-        <button id="panicErrorCloseBtn" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
-        <a id="panicErrorWhatsappLink" href="#" target="_blank" rel="noopener" class="btn-lift flex-1 py-3 rounded-2xl font-display font-semibold text-sm flex items-center justify-center gap-1.5" style="background:#25D366; color:#062712;"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>
+        <button id="panicErrorCloseBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard">Cerrar</button>
       </div>
     </div>
   </div>

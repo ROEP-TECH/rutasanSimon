@@ -106,12 +106,12 @@ function opKey(op) {
   return op.key || `${op.type}:${op.driverId || op.payload?.driver_id || ''}`;
 }
 
-async function sendConfiable(op) {
-  const key = opKey(op);
-  op = { ...op, key };
-
-  // Cancela cualquier intento viejo pendiente de esta misma acción.
-  saveQueue(loadQueue().filter((q) => q.key !== key));
+// Intenta mandar algo YA. Si falla por red/timeout lo deja en la cola
+// para reintentarlo solo y regresa queued:true.
+async function attemptOp(op) {
+  // Limpia cualquier copia vieja en cola de esta misma acción (por si
+  // quedó algo pendiente de antes).
+  saveQueue(loadQueue().filter((q) => q.key !== op.key));
 
   try {
     const { error } = await withTimeout(runOp(op));
@@ -128,6 +128,28 @@ async function sendConfiable(op) {
   return { ok: false, queued: true };
 }
 
+// CANDADO POR "KEY": si mandas dos avisos del mismo conductor muy
+// seguido (ej. dos checkpoints casi al mismo tiempo), NUNCA deben
+// viajar juntos a la red — porque internet no garantiza que lleguen
+// en el mismo orden en que los mandaste, y el que llegue AL FINAL es
+// el que se queda guardado (se sobrescriben). Por eso cada key tiene
+// su propia fila: la petición #2 espera a que la #1 termine (aunque
+// tarde hasta el timeout) antes de siquiera salir a la red.
+const pendingChains = {};
+
+function withKeyLock(key, fn) {
+  const prevChain = pendingChains[key] || Promise.resolve();
+  const nextChain = prevChain.then(fn, fn);
+  pendingChains[key] = nextChain.catch(() => {});
+  return nextChain;
+}
+
+async function sendConfiable(op) {
+  const key = opKey(op);
+  op = { ...op, key };
+  return withKeyLock(key, () => attemptOp(op));
+}
+
 let flushTimer = null;
 let flushing = false;
 
@@ -142,18 +164,13 @@ async function flushQueue() {
   if (!queue.length) { renderSyncIndicator(); return; }
   flushing = true;
 
-  const remaining = [];
-  for (const op of queue) {
-    try {
-      const { error } = await withTimeout(runOp(op));
-      if (error) remaining.push(op);
-    } catch (e) {
-      remaining.push(op);
-    }
-  }
-  saveQueue(remaining);
+  // También pasa por el mismo candado por key, para que un reintento
+  // de la cola nunca se cruce en el aire con un tap nuevo del usuario
+  // para esa misma acción.
+  await Promise.all(queue.map((op) => withKeyLock(op.key, () => attemptOp(op))));
   flushing = false;
 
+  const remaining = loadQueue();
   if (remaining.length) {
     const hasPanic = remaining.some((o) => o.type === 'panic_alert');
     scheduleFlush(hasPanic ? 3000 : FLUSH_INTERVAL_MS);

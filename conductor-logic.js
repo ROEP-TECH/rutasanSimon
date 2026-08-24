@@ -95,7 +95,24 @@ function runOp(op) {
 // Intenta mandar algo YA. Si falla por red/timeout lo deja en la cola
 // para reintentarlo solo y regresa queued:true — quien llamó puede
 // decidir si avisa "pendiente" o simplemente sigue adelante.
+//
+// IMPORTANTE: cada op lleva una "key" (ej. "route_event:driverId").
+// Antes de mandar o encolar, se quita de la cola cualquier op VIEJO
+// con la misma key. Así, si un reintento atrasado de "Salió de San
+// Simón" sigue esperando turno cuando ya diste "Llegué a San Martín",
+// el reintento viejo se cancela solo en vez de sobrescribir el dato
+// más nuevo cuando por fin le toque su turno.
+function opKey(op) {
+  return op.key || `${op.type}:${op.driverId || op.payload?.driver_id || ''}`;
+}
+
 async function sendConfiable(op) {
+  const key = opKey(op);
+  op = { ...op, key };
+
+  // Cancela cualquier intento viejo pendiente de esta misma acción.
+  saveQueue(loadQueue().filter((q) => q.key !== key));
+
   try {
     const { error } = await withTimeout(runOp(op));
     if (!error) return { ok: true, queued: false };
@@ -455,15 +472,25 @@ function setupCheckpointButton() {
 
 let checkpointSending = false;
 
-checkpointBtn.addEventListener('click', async () => {
+checkpointBtn.addEventListener('click', () => {
   if (checkpointSending) return; // evita doble tap mientras se procesa
   checkpointSending = true;
-  checkpointBtn.classList.add('opacity-60');
 
   if (navigator.vibrate) navigator.vibrate(20);
   const cp = CHECKPOINTS[checkpointIdx];
 
-  const { queued } = await sendConfiable({
+  // Optimista: avanza al siguiente aviso YA, sin esperar respuesta del
+  // servidor — así el botón nunca se siente atrasado/trabado. El envío
+  // real (con reintentos si hace falta) corre de fondo.
+  checkpointIdx = (checkpointIdx + 1) % CHECKPOINTS.length;
+  localStorage.setItem('rss_checkpoint_idx_' + currentDriver.id, String(checkpointIdx));
+  updateCheckpointButtonLabel();
+
+  checkpointSavedText.classList.remove('hidden');
+  checkpointSavedText.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Enviando...';
+  if (window.lucide) lucide.createIcons();
+
+  sendConfiable({
     type: 'route_event',
     payload: {
       driver_id: currentDriver.id,
@@ -472,25 +499,14 @@ checkpointBtn.addEventListener('click', async () => {
       route: currentDriverRoute,
       created_at: new Date().toISOString(),
     },
+  }).then(({ queued }) => {
+    checkpointSavedText.innerHTML = queued
+      ? '<i data-lucide="clock" class="w-3.5 h-3.5"></i> Sin señal por ahora — se enviará solo en cuanto regrese.'
+      : '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.';
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => checkpointSavedText.classList.add('hidden'), queued ? 5000 : 2500);
+    checkpointSending = false;
   });
-
-  // Avanzamos el checkpoint SIEMPRE (aunque se haya encolado), porque
-  // en la realidad el conductor ya salió/llegó — no tiene caso
-  // bloquearlo repitiendo el mismo botón. Lo que cambia es el mensaje:
-  // si se encoló, se le avisa que se mandará solo en cuanto haya señal.
-  checkpointSavedText.classList.remove('hidden');
-  checkpointSavedText.innerHTML = queued
-    ? '<i data-lucide="clock" class="w-3.5 h-3.5"></i> Sin señal por ahora — se enviará solo en cuanto regrese.'
-    : '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.';
-  if (window.lucide) lucide.createIcons();
-  setTimeout(() => checkpointSavedText.classList.add('hidden'), queued ? 5000 : 2500);
-
-  checkpointIdx = (checkpointIdx + 1) % CHECKPOINTS.length;
-  localStorage.setItem('rss_checkpoint_idx_' + currentDriver.id, String(checkpointIdx));
-  updateCheckpointButtonLabel();
-
-  checkpointSending = false;
-  checkpointBtn.classList.remove('opacity-60');
 });
 
 // ----- ESTATUS COMPARTIDO (debajo de Turno/Reposo) -----
@@ -796,7 +812,16 @@ toggleBtn.addEventListener('click', () => {
 });
 
 // ----- BOTÓN DE AYUDA / PÁNICO -----
-function openPanic() { panicOverlay.classList.add('show'); }
+function openPanic() {
+  // Siempre se abre desde el paso de confirmar, sin importar cómo haya
+  // quedado la vez anterior (enviado, encolado, etc.) — así el botón
+  // de pánico se puede volver a usar las veces que haga falta, sin
+  // tener que cerrar sesión.
+  document.getElementById('panicStepAsk').classList.remove('hidden');
+  document.getElementById('panicStepSent').classList.add('hidden');
+  document.getElementById('panicStepError').classList.add('hidden');
+  panicOverlay.classList.add('show');
+}
 function closePanic() { panicOverlay.classList.remove('show'); }
 
 panicBtn.addEventListener('click', () => {
@@ -840,14 +865,9 @@ async function sendPanicAlert(lat, lng) {
   document.getElementById('panicStepAsk').classList.add('hidden');
 
   if (queued) {
-    // No se pudo confirmar de inmediato por falta de señal. Se sigue
-    // reintentando solo de fondo (cada pocos segundos), pero mientras
-    // tanto le mostramos la pantalla de respaldo con WhatsApp, para
-    // que no se quede solo esperando sin hacer nada.
-    const errStep = document.getElementById('panicStepError');
-    const errMsg = errStep.querySelector('p:nth-of-type(2)');
-    if (errMsg) errMsg.textContent = 'Sin señal por ahora — seguimos intentando enviarla sola cada pocos segundos. Mientras tanto, avisa directo por WhatsApp con tu ubicación:';
-    errStep.classList.remove('hidden');
+    // No se pudo confirmar de inmediato por falta de señal, pero se
+    // sigue reintentando solo de fondo cada pocos segundos hasta salir.
+    document.getElementById('panicStepError').classList.remove('hidden');
   } else {
     document.getElementById('panicStepSent').classList.remove('hidden');
   }

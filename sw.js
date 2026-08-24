@@ -69,7 +69,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // cache-first para todo lo demás (tiles del mapa, fuentes, íconos, etc.)
+  // Llamadas de datos (fetch a Supabase u otra API): el navegador les pone
+  // destination === "" (vacío), a diferencia de imágenes/fuentes/tiles que
+  // sí tienen un destination definido. Estas NUNCA se deben servir desde
+  // caché — si no, el panel del dueño/checador se queda viendo datos
+  // viejos hasta que alguien refresca "de chiripa" en el momento correcto.
+  // Las dejamos pasar de largo (sin event.respondWith) para que vayan
+  // siempre directo a la red, como si el Service Worker no existiera.
+  if (request.destination === '') {
+    return;
+  }
+
+  // cache-first para lo demás: íconos, fuentes, manifest, tiles del mapa, etc.
   event.respondWith(
     caches.match(request).then((cached) => {
       const fetchPromise = fetch(request)

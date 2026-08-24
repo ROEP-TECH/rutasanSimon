@@ -39,6 +39,134 @@ let watchId = null;
 let locationChannel = null;
 let eventChannel = null;
 
+// ============================================================
+// ENVÍO CONFIABLE — timeout + reintentos + cola local.
+// Problema que resuelve: con señal mala, las llamadas a Supabase se
+// podían quedar esperando sin límite (botones "trabados"), y si de
+// plano fallaban, el aviso/ubicación se perdía sin más. Con esto:
+//   1) Ninguna llamada espera más de REQUEST_TIMEOUT_MS.
+//   2) Si falla (por señal o lo que sea), se guarda en localStorage
+//      y se reintenta solo — cuando regrese la conexión ('online') o
+//      cada FLUSH_INTERVAL_MS mientras haya pendientes.
+//   3) Nada se pierde silenciosamente: el chip de "Sin señal" en el
+//      header muestra cuántos reportes están esperando.
+// ============================================================
+const RETRY_QUEUE_KEY = 'rss_pending_queue';
+const REQUEST_TIMEOUT_MS = 10000;
+const FLUSH_INTERVAL_MS = 15000;
+
+function withTimeout(promise, ms = REQUEST_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout: sin respuesta del servidor')), ms)),
+  ]);
+}
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(RETRY_QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveQueue(queue) {
+  localStorage.setItem(RETRY_QUEUE_KEY, JSON.stringify(queue));
+  renderSyncIndicator();
+}
+
+// Cada tipo de operación sabe reconstruir su propia llamada a Supabase,
+// así se puede reintentar después aunque haya pasado tiempo o se haya
+// recargado la página.
+function runOp(op) {
+  switch (op.type) {
+    case 'live_location':
+      return supabase.from('live_locations').upsert(op.payload, { onConflict: 'driver_id' });
+    case 'live_location_off':
+      return supabase.from('live_locations').update({ updated_at: null }).eq('driver_id', op.driverId);
+    case 'route_event':
+      return supabase.from('route_events').upsert(op.payload, { onConflict: 'driver_id' });
+    case 'panic_alert':
+      return supabase.from('panic_alerts').insert(op.payload);
+    case 'driver_update':
+      return supabase.from('drivers').update(op.payload).eq('id', op.driverId);
+    default:
+      return Promise.resolve({ error: new Error('tipo de operación desconocido: ' + op.type) });
+  }
+}
+
+// Intenta mandar algo YA. Si falla por red/timeout lo deja en la cola
+// para reintentarlo solo y regresa queued:true — quien llamó puede
+// decidir si avisa "pendiente" o simplemente sigue adelante.
+async function sendConfiable(op) {
+  try {
+    const { error } = await withTimeout(runOp(op));
+    if (!error) return { ok: true, queued: false };
+    console.error(`Error enviando ${op.type}:`, error);
+  } catch (e) {
+    console.error(`Sin respuesta enviando ${op.type} (posible falta de señal):`, e.message || e);
+  }
+
+  const queue = loadQueue();
+  queue.push({ ...op, ts: Date.now() });
+  saveQueue(queue);
+  scheduleFlush(op.type === 'panic_alert' ? 2000 : 4000); // el pánico se reintenta más rápido
+  return { ok: false, queued: true };
+}
+
+let flushTimer = null;
+let flushing = false;
+
+function scheduleFlush(delayMs = FLUSH_INTERVAL_MS) {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => { flushTimer = null; flushQueue(); }, delayMs);
+}
+
+async function flushQueue() {
+  if (flushing) return;
+  const queue = loadQueue();
+  if (!queue.length) { renderSyncIndicator(); return; }
+  flushing = true;
+
+  const remaining = [];
+  for (const op of queue) {
+    try {
+      const { error } = await withTimeout(runOp(op));
+      if (error) remaining.push(op);
+    } catch (e) {
+      remaining.push(op);
+    }
+  }
+  saveQueue(remaining);
+  flushing = false;
+
+  if (remaining.length) {
+    const hasPanic = remaining.some((o) => o.type === 'panic_alert');
+    scheduleFlush(hasPanic ? 3000 : FLUSH_INTERVAL_MS);
+  }
+}
+
+window.addEventListener('online', () => flushQueue());
+setInterval(() => { if (loadQueue().length) flushQueue(); }, FLUSH_INTERVAL_MS);
+
+// ----- Chip de "Sin señal" en el header -----
+function renderSyncIndicator() {
+  const chip = document.getElementById('syncStatusChip');
+  if (!chip) return;
+  const pending = loadQueue().length;
+  const offline = !navigator.onLine;
+
+  if (!offline && pending === 0) {
+    chip.classList.add('hidden');
+    return;
+  }
+  chip.classList.remove('hidden');
+  chip.textContent = pending > 0
+    ? `Sin señal · ${pending} pendiente${pending === 1 ? '' : 's'}`
+    : 'Sin señal';
+}
+
+window.addEventListener('online', renderSyncIndicator);
+window.addEventListener('offline', renderSyncIndicator);
+
+
 // Wake Lock: evita que la pantalla se apague sola mientras se comparte
 // ubicación. En varios Android, si se apaga la pantalla el sistema es más
 // agresivo pausando todo, así que esto ayuda bastante.
@@ -325,31 +453,44 @@ function setupCheckpointButton() {
   updateCheckpointButtonLabel();
 }
 
+let checkpointSending = false;
+
 checkpointBtn.addEventListener('click', async () => {
+  if (checkpointSending) return; // evita doble tap mientras se procesa
+  checkpointSending = true;
+  checkpointBtn.classList.add('opacity-60');
+
   if (navigator.vibrate) navigator.vibrate(20);
   const cp = CHECKPOINTS[checkpointIdx];
-  const name = currentDriver.name;
 
-  const { error } = await supabase
-    .from('route_events')
-    .upsert({
+  const { queued } = await sendConfiable({
+    type: 'route_event',
+    payload: {
       driver_id: currentDriver.id,
       event_key: cp.key,
       label: cp.label,
       route: currentDriverRoute,
-      created_at: new Date().toISOString()
-    }, { onConflict: 'driver_id' });
+      created_at: new Date().toISOString(),
+    },
+  });
 
-  if (!error) {
-    checkpointSavedText.classList.remove('hidden');
-    setTimeout(() => checkpointSavedText.classList.add('hidden'), 2500);
-  } else {
-    console.error('Error guardando checkpoint en route_events:', error);
-  }
+  // Avanzamos el checkpoint SIEMPRE (aunque se haya encolado), porque
+  // en la realidad el conductor ya salió/llegó — no tiene caso
+  // bloquearlo repitiendo el mismo botón. Lo que cambia es el mensaje:
+  // si se encoló, se le avisa que se mandará solo en cuanto haya señal.
+  checkpointSavedText.classList.remove('hidden');
+  checkpointSavedText.innerHTML = queued
+    ? '<i data-lucide="clock" class="w-3.5 h-3.5"></i> Sin señal por ahora — se enviará solo en cuanto regrese.'
+    : '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.';
+  if (window.lucide) lucide.createIcons();
+  setTimeout(() => checkpointSavedText.classList.add('hidden'), queued ? 5000 : 2500);
 
   checkpointIdx = (checkpointIdx + 1) % CHECKPOINTS.length;
   localStorage.setItem('rss_checkpoint_idx_' + currentDriver.id, String(checkpointIdx));
   updateCheckpointButtonLabel();
+
+  checkpointSending = false;
+  checkpointBtn.classList.remove('opacity-60');
 });
 
 // ----- ESTATUS COMPARTIDO (debajo de Turno/Reposo) -----
@@ -396,7 +537,12 @@ function setupTurnoState() {
   renderTurnoBtn();
 }
 
+let turnoSending = false;
+
 turnoBtn.addEventListener('click', async () => {
+  if (turnoSending) return;
+  turnoSending = true;
+
   if (navigator.vibrate) navigator.vibrate(20);
   const startingShift = !onShift;
 
@@ -404,19 +550,19 @@ turnoBtn.addEventListener('click', async () => {
     ? { on_shift: true, shift_started_at: new Date().toISOString() }
     : { on_shift: false };
 
-  const { error } = await supabase
-    .from('drivers')
-    .update(payload)
-    .eq('id', currentDriver.id);
-
-  if (error) {
-    console.error('Error actualizando turno:', error);
-    return;
-  }
-
+  // Optimista: se refleja de inmediato en su pantalla (el botón nunca
+  // se siente "trabado"), y de fondo se manda/reintenta solo.
   onShift = startingShift;
   currentDriver.on_shift = onShift;
   renderTurnoBtn();
+
+  const { queued } = await sendConfiable({ type: 'driver_update', payload, driverId: currentDriver.id });
+  if (queued) {
+    turnoReposoStatus.classList.remove('hidden');
+    turnoReposoStatus.textContent = 'Sin señal — tu turno se confirmará en cuanto regrese la conexión.';
+  }
+
+  turnoSending = false;
 });
 
 // ----- REPOSO (15 MIN) -----
@@ -459,11 +605,7 @@ async function clearReposo() {
   stopReposoCountdown();
   reposoUntil = null;
   renderReposoBtn();
-  const { error } = await supabase
-    .from('drivers')
-    .update({ resting_until: null })
-    .eq('id', currentDriver.id);
-  if (error) console.error('Error limpiando reposo:', error);
+  await sendConfiable({ type: 'driver_update', payload: { resting_until: null }, driverId: currentDriver.id });
 }
 
 function startReposoCountdown() {
@@ -499,20 +641,15 @@ reposoBtn.addEventListener('click', async () => {
   }
 
   const until = new Date(Date.now() + REPOSO_MINUTES * 60 * 1000);
-  const { error } = await supabase
-    .from('drivers')
-    .update({ resting_until: until.toISOString() })
-    .eq('id', currentDriver.id);
 
-  if (error) {
-    console.error('Error marcando reposo:', error);
-    return;
-  }
-
+  // Optimista: arranca la cuenta regresiva de una vez, no hasta que
+  // confirme el servidor.
   currentDriver.resting_until = until.toISOString();
   reposoUntil = until;
   renderReposoBtn();
   startReposoCountdown();
+
+  await sendConfiable({ type: 'driver_update', payload: { resting_until: until.toISOString() }, driverId: currentDriver.id });
 });
 
 // ----- UBICACIÓN EN VIVO -----
@@ -523,20 +660,23 @@ async function guardarUbicacion(latitude, longitude, heading, speed) {
   coordsText.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
   updatedText.textContent = new Date(now).toLocaleTimeString('es-MX');
 
-  const { error } = await supabase
-    .from('live_locations')
-    .upsert({
+  const { queued } = await sendConfiable({
+    type: 'live_location',
+    payload: {
       driver_id: currentDriver.id,
       lat: latitude,
       lng: longitude,
       heading: heading ?? null,
       speed: speed ?? null,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'driver_id' });
+      updated_at: new Date().toISOString(),
+    },
+  });
 
-  if (error) {
-    console.error('Error guardando ubicación en live_locations:', error);
-    statusText.textContent = 'No se pudo actualizar tu ubicación (revisa permisos).';
+  // No mostramos error duro aquí: si se encoló, el chip de "Sin señal"
+  // ya le avisa al conductor, y el siguiente watchPosition (o el
+  // reintento automático) lo va a mandar solo en cuanto haya señal.
+  if (!queued) {
+    statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
   }
 }
 
@@ -647,14 +787,7 @@ async function stopSharing() {
   toggleLabel.innerHTML = 'Encender<br>ubicación';
   statusText.textContent = 'Presiona el botón para activar tu ubicación en el mapa.';
 
-  const { error } = await supabase
-    .from('live_locations')
-    .update({ updated_at: null })
-    .eq('driver_id', currentDriver.id);
-
-  if (error) {
-    console.error('Error apagando ubicación en live_locations:', error);
-  }
+  await sendConfiable({ type: 'live_location_off', driverId: currentDriver.id });
 }
 
 toggleBtn.addEventListener('click', () => {
@@ -692,26 +825,35 @@ document.getElementById('panicConfirmBtn').addEventListener('click', () => {
 });
 
 async function sendPanicAlert(lat, lng) {
-  const { error } = await supabase
-    .from('panic_alerts')
-    .insert({
+  const { queued } = await sendConfiable({
+    type: 'panic_alert',
+    payload: {
       driver_id: currentDriver.id,
       owner_id: currentDriver.owner_id,
       unit_id: currentDriver.unit_id || null,
       lat: lat,
       lng: lng,
-      status: 'pendiente'
-    });
+      status: 'pendiente',
+    },
+  });
 
-  if (!error) {
-    document.getElementById('panicStepAsk').classList.add('hidden');
-    document.getElementById('panicStepSent').classList.remove('hidden');
+  document.getElementById('panicStepAsk').classList.add('hidden');
+
+  if (queued) {
+    // No se pudo confirmar de inmediato por falta de señal. Se sigue
+    // reintentando solo de fondo (cada pocos segundos), pero mientras
+    // tanto le mostramos la pantalla de respaldo con WhatsApp, para
+    // que no se quede solo esperando sin hacer nada.
+    const errStep = document.getElementById('panicStepError');
+    const errMsg = errStep.querySelector('p:nth-of-type(2)');
+    if (errMsg) errMsg.textContent = 'Sin señal por ahora — seguimos intentando enviarla sola cada pocos segundos. Mientras tanto, avisa directo por WhatsApp con tu ubicación:';
+    errStep.classList.remove('hidden');
   } else {
-    console.error('Error enviando alerta de pánico:', error);
-    document.getElementById('panicStepAsk').classList.add('hidden');
-    document.getElementById('panicStepError').classList.remove('hidden');
+    document.getElementById('panicStepSent').classList.remove('hidden');
   }
 }
 
 // ----- ARRANQUE: si ya había sesión abierta hoy, entra directo sin PIN -----
+renderSyncIndicator();
+flushQueue(); // por si quedó algo pendiente de la sesión anterior (batería, cierre abrupto, etc.)
 tryAutoLogin();

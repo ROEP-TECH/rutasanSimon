@@ -509,6 +509,13 @@ checkpointBtn.addEventListener('click', () => {
 
   sendConfiable({
     type: 'route_event',
+    // OJO: la llave incluye cp.key (salio_san_simon, llego_san_martin, etc).
+    // Antes solo era "route_event:driverId", igual para los 4 avisos — eso
+    // hacía que, con mala señal, un aviso encolado se BORRARA en cuanto se
+    // presionaba el siguiente (el código de arriba limpia la cola por
+    // "misma llave" antes de mandar uno nuevo). Con esto cada checkpoint
+    // tiene su propio carril y ninguno se come al otro.
+    key: `route_event:${currentDriver.id}:${cp.key}`,
     payload: {
       driver_id: currentDriver.id,
       event_key: cp.key,

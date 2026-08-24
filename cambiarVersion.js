@@ -3,8 +3,9 @@
   // ============================================================
   (function() {
     // --- Versión actual y changelog ---
-    const APP_VERSION = '0.2';
+    const APP_VERSION = '0.3';
     const CHANGELOG = [
+      'Corregido: el panel de dueño/checador ya no se queda con avisos viejos — ya no hace falta refrescar para verlos.',
       'Corrección de errores menores.',
       'Se agrego personalizacion al conductor.'
     ];

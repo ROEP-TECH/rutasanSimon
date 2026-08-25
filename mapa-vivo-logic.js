@@ -51,19 +51,43 @@ function routeLabel(route) {
   return route === 'capilla' ? 'Por Capilla' : (route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal');
 }
 
-function driverIcon(route, name) {
+function driverIcon(route) {
   const color = routeColor(route);
-  const safeName = (name || 'Conductor').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return L.divIcon({
     className: '',
-    html: `
-      <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-        <div style="background:rgba(10,14,19,.85); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.4); font-family:'Sora',sans-serif; max-width:140px; overflow:hidden; text-overflow:ellipsis;">${safeName}</div>
-        <div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>
-      </div>`,
-    iconSize: [140, 60],
-    iconAnchor: [70, 34],
-    popupAnchor: [0, -34],
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function centerOnDriver(id) {
+  const marker = driverMarkers[id];
+  if (!marker || !map) return;
+  map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.6 });
+  marker.openPopup();
+}
+
+// Chips con el nombre de cada conductor en vivo, junto al título "Mapa en
+// vivo". Al darles click centran el mapa en la posición actual de ese
+// conductor en ese momento (misma lógica que el click sobre el pin).
+function renderDriverChips(onlineDrivers) {
+  const container = document.getElementById('driverChips');
+  if (!container) return;
+
+  container.innerHTML = onlineDrivers.map((d) => `
+    <button class="driver-chip" data-driver-id="${d.id}">
+      <span class="chip-dot" style="background:${routeColor(d.route)};"></span>
+      ${escapeHtml(d.name || 'Conductor')}
+    </button>
+  `).join('');
+
+  container.querySelectorAll('.driver-chip').forEach((chip) => {
+    chip.addEventListener('click', () => centerOnDriver(chip.dataset.driverId));
   });
 }
 
@@ -87,6 +111,7 @@ async function renderDrivers() {
 
   let onlineCount = 0;
   const seenIds = new Set();
+  const onlineDrivers = [];
 
   (drivers || []).forEach((d) => {
     const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
@@ -95,19 +120,16 @@ async function renderDrivers() {
     if (fresh && location.lat && location.lng) {
       onlineCount++;
       seenIds.add(d.id);
+      onlineDrivers.push(d);
       const latlng = [location.lat, location.lng];
       const popupText = `${d.name || 'Conductor'} · ${routeLabel(d.route)}`;
       if (!driverMarkers[d.id]) {
-        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route, d.name) }).addTo(map).bindPopup(popupText);
-        // Al dar click (en el pin o en la etiqueta del nombre) se centra el
-        // mapa en la posición actual de ese conductor en ese momento.
-        driverMarkers[d.id].on('click', () => {
-          map.flyTo(driverMarkers[d.id].getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.6 });
-        });
+        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route) }).addTo(map).bindPopup(popupText);
+        driverMarkers[d.id].on('click', () => centerOnDriver(d.id));
       } else {
         driverMarkers[d.id].setLatLng(latlng);
         driverMarkers[d.id].setPopupContent(popupText);
-        driverMarkers[d.id].setIcon(driverIcon(d.route, d.name));
+        driverMarkers[d.id].setIcon(driverIcon(d.route));
       }
     }
   });
@@ -124,6 +146,8 @@ async function renderDrivers() {
   if (onlineCountText) onlineCountText.textContent = `${onlineCount} en ruta`;
   const liveDot = document.getElementById('liveDot');
   if (liveDot) liveDot.classList.toggle('stale', onlineCount === 0);
+
+  renderDriverChips(onlineDrivers);
 
   const activeMarkers = Object.values(driverMarkers);
   if (activeMarkers.length > 0 && !centeredOnce) {

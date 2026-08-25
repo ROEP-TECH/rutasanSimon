@@ -437,27 +437,67 @@ function setupDriverNameField() {
 }
 
 // ----- RAMAL ASIGNADO -----
-let currentDriverRoute = 'capilla';
+// A partir de ahora el ramal NO se hereda solo de ayer: cada día el chofer
+// tiene que tocar "Por Capilla" o "Por Secundaria" aunque sea el mismo de
+// ayer. Mientras no lo haga, el botón de checkpoint queda bloqueado, para
+// que de una forma u otra quede puesto antes de reportar nada.
+let currentDriverRoute = null;
+const ramalLabel = document.getElementById('ramalLabel');
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function ramalStorageKey() {
+  return 'rss_driver_route_' + currentDriver.id;
+}
 
 function updateRamalButtons() {
   document.querySelectorAll('.ramal-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.route === currentDriverRoute);
+    b.classList.toggle('needs-choice', !currentDriverRoute);
   });
+  if (ramalLabel) {
+    ramalLabel.textContent = currentDriverRoute ? 'Tu ramal hoy' : '⚠ Elige tu ramal de hoy';
+    ramalLabel.classList.toggle('needs-choice', !currentDriverRoute);
+  }
+}
+
+function updateRamalGate() {
+  // Sin ramal elegido HOY, no se puede reportar checkpoint.
+  const blocked = !currentDriverRoute;
+  checkpointBtn.disabled = blocked;
+  checkpointBtn.style.opacity = blocked ? '.45' : '';
+  checkpointBtn.style.pointerEvents = blocked ? 'none' : '';
 }
 
 function setupDriverRoute() {
-  const saved = localStorage.getItem('rss_driver_route_' + currentDriver.id);
-  currentDriverRoute = saved || currentDriver.route || 'capilla';
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(ramalStorageKey()));
+  } catch (e) {
+    saved = null;
+  }
+  // Solo cuenta si es de HOY; si es de otro día (o no hay nada), se pide
+  // elegir de nuevo aunque currentDriver.route en la base traiga algo viejo.
+  currentDriverRoute = (saved && saved.date === todayStr() && saved.route) ? saved.route : null;
   updateRamalButtons();
+  updateRamalGate();
+}
+
+function setDriverRoute(route) {
+  currentDriverRoute = route;
+  updateRamalButtons();
+  updateRamalGate();
+  if (navigator.vibrate) navigator.vibrate(15);
+  localStorage.setItem(ramalStorageKey(), JSON.stringify({ route, date: todayStr() }));
 }
 
 document.querySelectorAll('.ramal-btn').forEach((btn) => {
   btn.addEventListener('click', async () => {
-    currentDriverRoute = btn.dataset.route;
-    updateRamalButtons();
-    if (navigator.vibrate) navigator.vibrate(15);
-    localStorage.setItem('rss_driver_route_' + currentDriver.id, currentDriverRoute);
-    
+    setDriverRoute(btn.dataset.route);
+
     const { error } = await supabase
       .from('drivers')
       .update({ route: currentDriverRoute })
@@ -491,6 +531,7 @@ let checkpointSending = false;
 
 checkpointBtn.addEventListener('click', () => {
   if (checkpointSending) return; // evita doble tap mientras se procesa
+  if (!currentDriverRoute) return; // respaldo: sin ramal elegido hoy, no reporta
   checkpointSending = true;
 
   if (navigator.vibrate) navigator.vibrate(20);
@@ -509,13 +550,6 @@ checkpointBtn.addEventListener('click', () => {
 
   sendConfiable({
     type: 'route_event',
-    // OJO: la llave incluye cp.key (salio_san_simon, llego_san_martin, etc).
-    // Antes solo era "route_event:driverId", igual para los 4 avisos — eso
-    // hacía que, con mala señal, un aviso encolado se BORRARA en cuanto se
-    // presionaba el siguiente (el código de arriba limpia la cola por
-    // "misma llave" antes de mandar uno nuevo). Con esto cada checkpoint
-    // tiene su propio carril y ninguno se come al otro.
-    key: `route_event:${currentDriver.id}:${cp.key}`,
     payload: {
       driver_id: currentDriver.id,
       event_key: cp.key,
@@ -901,99 +935,3 @@ async function sendPanicAlert(lat, lng) {
 renderSyncIndicator();
 flushQueue(); // por si quedó algo pendiente de la sesión anterior (batería, cierre abrupto, etc.)
 tryAutoLogin();
-// ============================================================
-// LISTA DE CONDUCTORES ACTIVOS (encima del mapa)
-// ============================================================
-const activeDriversContainer = document.getElementById('activeDriversList');
-const activeCountBadge = document.getElementById('activeCountBadge');
-const noActiveMsg = document.getElementById('noActiveDriversMsg');
-
-// Función para obtener conductores con ubicación reciente
-async function fetchActiveDrivers() {
-  const { data: drivers, error } = await supabase
-    .from('drivers')
-    .select(`
-      id,
-      name,
-      route,
-      live_location:live_locations ( lat, lng, updated_at )
-    `);
-
-  if (error) {
-    console.error('Error al obtener conductores activos:', error);
-    return [];
-  }
-
-  const now = new Date();
-  const active = drivers.filter(d => {
-    const loc = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
-    if (!loc || !loc.updated_at) return false;
-    const updatedAt = new Date(loc.updated_at);
-    const diffMinutes = (now - updatedAt) / (1000 * 60);
-    return diffMinutes < 2 && loc.lat && loc.lng;
-  });
-
-  return active;
-}
-
-// Renderiza la lista en el contenedor
-async function renderActiveDrivers() {
-  const active = await fetchActiveDrivers();
-
-  // Actualizar badge
-  if (activeCountBadge) {
-    activeCountBadge.textContent = active.length;
-  }
-
-  // Limpiar lista (excepto el mensaje de "sin datos")
-  const items = activeDriversContainer.querySelectorAll('.active-driver-chip');
-  items.forEach(el => el.remove());
-
-  if (active.length === 0) {
-    if (noActiveMsg) noActiveMsg.style.display = 'block';
-    return;
-  }
-  if (noActiveMsg) noActiveMsg.style.display = 'none';
-
-  // Crear chips para cada conductor activo
-  active.forEach(d => {
-    const chip = document.createElement('span');
-    chip.className = 'active-driver-chip inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
-    chip.style.cssText = `
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      color: var(--ink);
-    `;
-
-    // Punto verde de "vivo"
-    const dot = document.createElement('span');
-    dot.className = 'w-2 h-2 rounded-full bg-agave';
-    dot.style.boxShadow = '0 0 0 2px var(--agave-glow)';
-
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = d.name || 'Sin nombre';
-
-    const routeSpan = document.createElement('span');
-    routeSpan.textContent = d.route ? (d.route === 'capilla' ? '🕍' : '🏫') : '';
-    routeSpan.style.fontSize = '12px';
-
-    chip.appendChild(dot);
-    chip.appendChild(nameSpan);
-    if (d.route) chip.appendChild(routeSpan);
-
-    activeDriversContainer.appendChild(chip);
-  });
-}
-
-// Escuchar cambios en live_locations y drivers
-supabase
-  .channel('checador-active-drivers')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderActiveDrivers())
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderActiveDrivers())
-  .subscribe();
-
-// Actualizar cada 30 segundos por si algo falla
-setInterval(renderActiveDrivers, 30000);
-
-// Llamar al inicio
-renderActiveDrivers();

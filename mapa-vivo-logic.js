@@ -42,7 +42,6 @@ async function renderDrivers() {
 
   let onlineCount = 0;
   const seenIds = new Set();
-  const activeNames = []; // <--- NUEVO: para guardar nombres de activos
 
   (drivers || []).forEach((d) => {
     const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
@@ -51,8 +50,6 @@ async function renderDrivers() {
     if (fresh && location.lat && location.lng) {
       onlineCount++;
       seenIds.add(d.id);
-      activeNames.push(d.name || 'Conductor'); // <--- NUEVO: guardamos el nombre
-      
       const latlng = [location.lat, location.lng];
       const popupText = `${d.name || 'Conductor'} · ${routeLabel(d.route)}`;
       if (!driverMarkers[d.id]) {
@@ -62,60 +59,6 @@ async function renderDrivers() {
         driverMarkers[d.id].setPopupContent(popupText);
       }
     }
-  });
-
-  // --- NUEVO: actualizar la lista de nombres en el DOM ---
-  const listContainer = document.getElementById('activeDriversList');
-  const noActiveMsg = document.getElementById('noActiveMsg');
-  if (listContainer) {
-    // Eliminar todos los hijos excepto el mensaje "Ninguno"
-    while (listContainer.firstChild) {
-      listContainer.removeChild(listContainer.firstChild);
-    }
-    if (activeNames.length === 0) {
-      listContainer.appendChild(noActiveMsg);
-      noActiveMsg.style.display = 'inline';
-    } else {
-      noActiveMsg.style.display = 'none';
-      activeNames.forEach(name => {
-        const chip = document.createElement('span');
-        chip.textContent = name;
-        chip.style.cssText = `
-          background: var(--surface-2);
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          padding: 0.1rem 0.7rem;
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--ink);
-          white-space: nowrap;
-        `;
-        listContainer.appendChild(chip);
-      });
-    }
-  }
-  // --- FIN NUEVO ---
-
-  // Quitar del mapa a los conductores que ya no tienen ubicación fresca
-  Object.keys(driverMarkers).forEach((id) => {
-    if (!seenIds.has(id)) {
-      map.removeLayer(driverMarkers[id]);
-      delete driverMarkers[id];
-    }
-  });
-
-  const onlineCountText = document.getElementById('onlineCountText');
-  if (onlineCountText) onlineCountText.textContent = `${onlineCount} en ruta`;
-  const liveDot = document.getElementById('liveDot');
-  if (liveDot) liveDot.classList.toggle('stale', onlineCount === 0);
-
-  const activeMarkers = Object.values(driverMarkers);
-  if (activeMarkers.length > 0 && !centeredOnce) {
-    const group = L.featureGroup(activeMarkers);
-    map.fitBounds(group.getBounds().pad(0.2));
-    centeredOnce = true;
-  }
-}
   });
 
   // Quitar del mapa a los conductores que ya no tienen ubicación fresca

@@ -30,7 +30,7 @@
   }
 }
 </script>
-<script type="module" src="mapa-vivo-logic.js"></script>
+<script type="module" src="mapa-vivo-logic.js?v=2"></script>
 
 <style>
   :root{
@@ -72,6 +72,16 @@
   .btn-icon:hover{ border-color:var(--talavera); }
   #liveDot{ width:8px; height:8px; border-radius:50%; background:var(--agave); box-shadow:0 0 0 4px rgba(47,217,138,.3); flex-shrink:0; }
   #liveDot.stale{ background:var(--ink-faint); box-shadow:none; }
+  #driverChips::-webkit-scrollbar{ display:none; }
+  .driver-chip{
+    flex-shrink:0; display:flex; align-items:center; gap:.35rem; padding:.35rem .65rem;
+    border-radius:999px; background:var(--surface-2); border:1px solid var(--border);
+    color:var(--ink); font-size:12px; font-weight:600; white-space:nowrap; cursor:pointer;
+    transition: all .15s ease; font-family:'Sora', sans-serif;
+  }
+  .driver-chip:hover{ border-color:var(--talavera); transform: translateY(-1px); }
+  .driver-chip:active{ transform: scale(.96); }
+  .driver-chip .chip-dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 
   #map{ flex:1 1 auto; width:100%; background:var(--surface-2); filter: saturate(.5) brightness(.62) contrast(1.05) invert(1) hue-rotate(180deg); }
   html[data-theme="light"] #map{ filter:none; }
@@ -84,14 +94,15 @@
 <body>
 
 <header>
-  <div style="display:flex; align-items:center; gap:.65rem; min-width:0;">
+  <div style="display:flex; align-items:center; gap:.65rem; min-width:0; flex:1 1 auto;">
     <button id="backBtn" class="btn-icon" aria-label="Cerrar mapa"><i data-lucide="arrow-left"></i></button>
-    <div style="min-width:0;">
+    <div style="min-width:0; flex-shrink:0;">
       <p class="font-display font-semibold text-sm" style="line-height:1.1;">Mapa en vivo</p>
       <p style="font-size:11px; color:var(--ink-soft); line-height:1.1; margin-top:2px;">Ruta San Simón · R-18</p>
     </div>
+    <div id="driverChips" style="display:flex; align-items:center; gap:.4rem; overflow-x:auto; scrollbar-width:none; padding:.15rem 0 .15rem .2rem; min-width:0;"></div>
   </div>
-  <div style="display:flex; align-items:center; gap:.6rem;">
+  <div style="display:flex; align-items:center; gap:.6rem; flex-shrink:0;">
     <span style="display:flex; align-items:center; gap:.4rem; font-size:12px; color:var(--ink-soft);">
       <span id="liveDot"></span> <span id="onlineCountText">— en ruta</span>
     </span>

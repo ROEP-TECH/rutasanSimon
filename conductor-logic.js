@@ -901,3 +901,99 @@ async function sendPanicAlert(lat, lng) {
 renderSyncIndicator();
 flushQueue(); // por si quedó algo pendiente de la sesión anterior (batería, cierre abrupto, etc.)
 tryAutoLogin();
+// ============================================================
+// LISTA DE CONDUCTORES ACTIVOS (encima del mapa)
+// ============================================================
+const activeDriversContainer = document.getElementById('activeDriversList');
+const activeCountBadge = document.getElementById('activeCountBadge');
+const noActiveMsg = document.getElementById('noActiveDriversMsg');
+
+// Función para obtener conductores con ubicación reciente
+async function fetchActiveDrivers() {
+  const { data: drivers, error } = await supabase
+    .from('drivers')
+    .select(`
+      id,
+      name,
+      route,
+      live_location:live_locations ( lat, lng, updated_at )
+    `);
+
+  if (error) {
+    console.error('Error al obtener conductores activos:', error);
+    return [];
+  }
+
+  const now = new Date();
+  const active = drivers.filter(d => {
+    const loc = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
+    if (!loc || !loc.updated_at) return false;
+    const updatedAt = new Date(loc.updated_at);
+    const diffMinutes = (now - updatedAt) / (1000 * 60);
+    return diffMinutes < 2 && loc.lat && loc.lng;
+  });
+
+  return active;
+}
+
+// Renderiza la lista en el contenedor
+async function renderActiveDrivers() {
+  const active = await fetchActiveDrivers();
+
+  // Actualizar badge
+  if (activeCountBadge) {
+    activeCountBadge.textContent = active.length;
+  }
+
+  // Limpiar lista (excepto el mensaje de "sin datos")
+  const items = activeDriversContainer.querySelectorAll('.active-driver-chip');
+  items.forEach(el => el.remove());
+
+  if (active.length === 0) {
+    if (noActiveMsg) noActiveMsg.style.display = 'block';
+    return;
+  }
+  if (noActiveMsg) noActiveMsg.style.display = 'none';
+
+  // Crear chips para cada conductor activo
+  active.forEach(d => {
+    const chip = document.createElement('span');
+    chip.className = 'active-driver-chip inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
+    chip.style.cssText = `
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--ink);
+    `;
+
+    // Punto verde de "vivo"
+    const dot = document.createElement('span');
+    dot.className = 'w-2 h-2 rounded-full bg-agave';
+    dot.style.boxShadow = '0 0 0 2px var(--agave-glow)';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = d.name || 'Sin nombre';
+
+    const routeSpan = document.createElement('span');
+    routeSpan.textContent = d.route ? (d.route === 'capilla' ? '🕍' : '🏫') : '';
+    routeSpan.style.fontSize = '12px';
+
+    chip.appendChild(dot);
+    chip.appendChild(nameSpan);
+    if (d.route) chip.appendChild(routeSpan);
+
+    activeDriversContainer.appendChild(chip);
+  });
+}
+
+// Escuchar cambios en live_locations y drivers
+supabase
+  .channel('checador-active-drivers')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderActiveDrivers())
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderActiveDrivers())
+  .subscribe();
+
+// Actualizar cada 30 segundos por si algo falla
+setInterval(renderActiveDrivers, 30000);
+
+// Llamar al inicio
+renderActiveDrivers();

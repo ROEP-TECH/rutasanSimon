@@ -399,6 +399,18 @@
       <div class="px-4 pt-4 pb-1">
         <h2 class="font-display font-semibold text-sm uppercase tracking-wide flex items-center gap-1.5" style="color:var(--ink-soft);"><i data-lucide="map" class="w-4 h-4"></i> Mapa en vivo</h2>
       </div>
+      <!-- LISTA DE CONDUCTORES EN VIVO (arriba del mapa) -->
+<div id="activeDriversContainer" class="px-4 pt-3 pb-1">
+  <div class="flex items-center gap-2 mb-1">
+    <i data-lucide="wifi" class="w-4 h-4 text-agave"></i>
+    <span class="font-display font-semibold text-xs uppercase tracking-wide" style="color:var(--ink-soft);">En conexión ahora</span>
+    <span id="activeCountBadge" class="text-[11px] font-mono ml-auto" style="color:var(--ink-soft);">0</span>
+  </div>
+  <div id="activeDriversList" class="flex flex-wrap gap-1.5">
+    <!-- se llenará con JS -->
+    <p id="noActiveDriversMsg" class="text-xs" style="color:var(--ink-soft);">Ningún conductor con ubicación activa</p>
+  </div>
+</div>
       <div id="map"></div>
     </section>
 

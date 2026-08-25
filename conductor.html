@@ -176,6 +176,12 @@
   .ramal-btn:not(.active):hover{ border-color:var(--talavera); color:var(--ink); transform: translateY(-1px); }
   .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#1b1002; box-shadow:var(--shadow); }
   .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#052414; box-shadow:var(--shadow); }
+  .ramal-btn.needs-choice{ border-color:var(--talavera); animation: ramalPulse 1.6s ease-in-out infinite; }
+  #ramalLabel.needs-choice{ color:var(--talavera); font-weight:700; }
+  @keyframes ramalPulse{
+    0%, 100% { box-shadow: 0 0 0 0 rgba(214,84,64,.35); }
+    50% { box-shadow: 0 0 0 5px rgba(214,84,64,0); }
+  }
 
   #turnoBtn.on{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%) !important; color:#052414 !important; }
   #reposoBtn.active{ background:var(--surface-2) !important; color:var(--ink-soft) !important; border:1.5px dashed var(--border); }
@@ -750,7 +756,7 @@
     <p id="turnoReposoStatus" class="text-[11px] mt-2 text-center hidden" style="color:var(--ink-soft);"></p>
 
     <div class="w-full max-w-sm mt-5">
-      <p class="text-[11px] uppercase tracking-wide mb-1.5 px-1" style="color:var(--ink-faint);">Tu ramal hoy</p>
+      <p id="ramalLabel" class="text-[11px] uppercase tracking-wide mb-1.5 px-1" style="color:var(--ink-faint);">Tu ramal hoy</p>
       <div class="grid grid-cols-2 gap-2.5">
         <button class="ramal-btn" data-route="capilla">Por Capilla</button>
         <button class="ramal-btn" data-route="secundaria">Por Secundaria</button>

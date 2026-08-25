@@ -101,7 +101,15 @@
     </button>
   </div>
 </header>
-
+<!-- LISTA DE CONDUCTORES ACTIVOS -->
+<div id="activeDriversBar" style="padding: 0.5rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-height: 44px;">
+  <span style="font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-right: 0.25rem;">
+    <i data-lucide="wifi" style="width:14px;height:14px;display:inline-block;vertical-align:middle;"></i> Activos:
+  </span>
+  <span id="activeDriversList" style="display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: center;">
+    <span id="noActiveMsg" style="font-size: 13px; color: var(--ink-soft);">Ninguno</span>
+  </span>
+</div>
 <div id="map"></div>
 
 <script>

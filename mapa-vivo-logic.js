@@ -4,6 +4,45 @@ let map = null;
 let driverMarkers = {}; // driver_id -> L.Marker
 let centeredOnce = false;
 
+// ----- SEGURIDAD: exigir sesión de checador -----
+// mapa-vivo.html se abre en pestaña aparte (target="_blank" desde el panel)
+// y antes no checaba nada — cualquiera que se supiera o adivinara el
+// nombre del archivo lo abría directo, sin haber entrado nunca con el PIN,
+// y veía la ubicación en vivo de todos los conductores. Ahora exige que ya
+// exista una sesión de checador válida (la misma que guarda checador.html
+// al entrar con el PIN) antes de cargar mapa o datos.
+async function requireChecadorSession() {
+  const checadorId = localStorage.getItem('rss_checador_id');
+  if (!checadorId) return false;
+
+  // No basta con que exista el valor en localStorage (alguien lo podría
+  // poner a mano desde la consola) — se valida contra la base para
+  // confirmar que es un checador real y sigue existiendo.
+  const { data, error } = await supabase
+    .from('checadores')
+    .select('id')
+    .eq('id', checadorId)
+    .single();
+
+  if (error || !data) {
+    localStorage.removeItem('rss_checador_id');
+    return false;
+  }
+  return true;
+}
+
+function showLoginRequired() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.1rem; text-align:center; padding:2rem; font-family:'Plus Jakarta Sans', sans-serif; color:#EDF1F5; background:#0A0E13;">
+      <div style="width:52px; height:52px; border-radius:999px; background:#171E27; border:1px solid #232B36; display:flex; align-items:center; justify-content:center;">
+        <i data-lucide="lock" style="width:22px; height:22px; color:#FFAE33;"></i>
+      </div>
+      <p style="font-size:15px; font-weight:600; max-width:280px;">Necesitas iniciar sesión como checador para ver el mapa en vivo.</p>
+      <a href="checador.html" style="background:#3FB0F0; color:#08131c; padding:.75rem 1.5rem; border-radius:999px; font-weight:700; font-family:'Sora',sans-serif; text-decoration:none; font-size:14px;">Ir a iniciar sesión</a>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
 function routeColor(route) {
   return route === 'secundaria' ? '#2FD98A' : (route === 'capilla' ? '#FFAE33' : '#3FB0F0');
 }
@@ -12,13 +51,19 @@ function routeLabel(route) {
   return route === 'capilla' ? 'Por Capilla' : (route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal');
 }
 
-function driverIcon(route) {
+function driverIcon(route, name) {
   const color = routeColor(route);
+  const safeName = (name || 'Conductor').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return L.divIcon({
     className: '',
-    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    html: `
+      <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+        <div style="background:rgba(10,14,19,.85); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.4); font-family:'Sora',sans-serif; max-width:140px; overflow:hidden; text-overflow:ellipsis;">${safeName}</div>
+        <div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>
+      </div>`,
+    iconSize: [140, 60],
+    iconAnchor: [70, 34],
+    popupAnchor: [0, -34],
   });
 }
 
@@ -53,10 +98,16 @@ async function renderDrivers() {
       const latlng = [location.lat, location.lng];
       const popupText = `${d.name || 'Conductor'} · ${routeLabel(d.route)}`;
       if (!driverMarkers[d.id]) {
-        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route) }).addTo(map).bindPopup(popupText);
+        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route, d.name) }).addTo(map).bindPopup(popupText);
+        // Al dar click (en el pin o en la etiqueta del nombre) se centra el
+        // mapa en la posición actual de ese conductor en ese momento.
+        driverMarkers[d.id].on('click', () => {
+          map.flyTo(driverMarkers[d.id].getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.6 });
+        });
       } else {
         driverMarkers[d.id].setLatLng(latlng);
         driverMarkers[d.id].setPopupContent(popupText);
+        driverMarkers[d.id].setIcon(driverIcon(d.route, d.name));
       }
     }
   });
@@ -82,19 +133,27 @@ async function renderDrivers() {
   }
 }
 
-initMap();
-renderDrivers();
+(async () => {
+  const hasSession = await requireChecadorSession();
+  if (!hasSession) {
+    showLoginRequired();
+    return;
+  }
 
-supabase
-  .channel('mapa-vivo-locations-channel')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderDrivers())
-  .subscribe();
+  initMap();
+  renderDrivers();
 
-supabase
-  .channel('mapa-vivo-drivers-channel')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderDrivers())
-  .subscribe();
+  supabase
+    .channel('mapa-vivo-locations-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderDrivers())
+    .subscribe();
 
-setInterval(renderDrivers, 30000);
+  supabase
+    .channel('mapa-vivo-drivers-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderDrivers())
+    .subscribe();
 
-if (window.lucide) lucide.createIcons();
+  setInterval(renderDrivers, 30000);
+
+  if (window.lucide) lucide.createIcons();
+})();

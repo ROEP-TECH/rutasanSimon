@@ -729,10 +729,62 @@ reposoBtn.addEventListener('click', async () => {
 // ----- UBICACIÓN EN VIVO -----
 let bgWatcherId = null; // id del watcher nativo (solo se usa dentro de la app empacada)
 
+// ============================================================
+// THROTTLE de envío — el problema real del consumo de batería no es
+// leer el GPS (eso lo hace el chip solo), sino que ANTES mandábamos
+// una petición a Supabase cada vez que watchPosition entregaba una
+// lectura nueva (con enableHighAccuracy eso puede ser cada 1-3 seg
+// en Android). Eso mantenía CPU + radio de datos despiertos todo el
+// tiempo. Ahora: la pantalla del conductor se sigue actualizando al
+// instante (es barato, no toca red), pero solo se manda a Supabase
+// cuando pasó suficiente tiempo O el conductor se movió suficiente
+// distancia — igual que ya hacía la ruta nativa con distanceFilter.
+// ============================================================
+const MIN_SEND_INTERVAL_MS = 8000; // no mandar más seguido que esto...
+const MAX_SEND_INTERVAL_MS = 20000; // ...pero tampoco dejar el mapa más viejo que esto, aunque no se mueva
+const MIN_SEND_DISTANCE_M = 15; // o si se movió esto, manda aunque no haya pasado MIN_SEND_INTERVAL_MS
+
+let lastSentAt = 0;
+let lastSentLat = null;
+let lastSentLng = null;
+
+function distanciaMetros(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function debeMandarAhora(latitude, longitude) {
+  const now = Date.now();
+  const elapsed = now - lastSentAt;
+
+  if (lastSentLat === null) return true; // primer fix: manda sí o sí
+  if (elapsed >= MAX_SEND_INTERVAL_MS) return true; // ya se tardó mucho, refresca aunque esté parado
+  if (elapsed < MIN_SEND_INTERVAL_MS) return false; // muy seguido, espérate
+
+  const moved = distanciaMetros(lastSentLat, lastSentLng, latitude, longitude);
+  return moved >= MIN_SEND_DISTANCE_M;
+}
+
 async function guardarUbicacion(latitude, longitude, heading, speed) {
   const now = Date.now();
+
+  // Esto es barato (solo DOM), se actualiza siempre para que el
+  // conductor vea su posición al instante en su propia pantalla.
   coordsText.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
   updatedText.textContent = new Date(now).toLocaleTimeString('es-MX');
+
+  // Esto es caro (red + Supabase), se manda solo si el throttle lo permite.
+  if (!debeMandarAhora(latitude, longitude)) return;
+
+  lastSentAt = now;
+  lastSentLat = latitude;
+  lastSentLng = longitude;
 
   const { queued } = await sendConfiable({
     type: 'live_location',
@@ -823,6 +875,12 @@ async function stopSharingNative() {
 // --- Función pública que usa el botón: decide navegador vs nativo ---
 function startSharing() {
   if (navigator.vibrate) navigator.vibrate(20);
+
+  // Reinicia el throttle: si el conductor apagó y volvió a encender la
+  // ubicación, el primer fix de la nueva sesión debe mandarse de una vez.
+  lastSentAt = 0;
+  lastSentLat = null;
+  lastSentLng = null;
 
   if (Capacitor.isNativePlatform()) {
     startSharingNative();

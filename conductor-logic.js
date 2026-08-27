@@ -1,1045 +1,937 @@
 import { supabase } from './supabase-config.js';
 import { initPushNotifications } from './push-notifications.js';
 
-// ----- HELPER: enganchar eventos sin tronar si el elemento no existe -----
-function on(el, event, handler, label) {
-  if (!el) {
-    console.warn('[checador] Elemento no encontrado para el evento:', event, label ? `(${label})` : '');
-    return;
-  }
-  el.addEventListener(event, handler);
-}
+// Capacitor se inyecta como objeto global (window.Capacitor) dentro de la app nativa.
+// Los plugins ya sincronizados quedan disponibles en window.Capacitor.Plugins — no
+// se usa "import" de npm porque este proyecto no usa bundler.
+const Capacitor = window.Capacitor || { isNativePlatform: () => false, Plugins: {} };
+const BackgroundGeolocation = Capacitor.Plugins ? Capacitor.Plugins.BackgroundGeolocation : null;
 
-// ----- ELEMENTOS DOM -----
+// Elementos DOM
 const pinScreen = document.getElementById('pinScreen');
 const mainScreen = document.getElementById('mainScreen');
 const pinInput = document.getElementById('pinInput');
 const pinError = document.getElementById('pinError');
-const checadorNameText = document.getElementById('checadorNameText');
-const unitsGrid = document.getElementById('unitsGrid');
-const unitsEmpty = document.getElementById('unitsEmpty');
-const toast = document.getElementById('toast');
-const toastText = document.getElementById('toastText');
+const checkpointBtn = document.getElementById('checkpointBtn');
+const checkpointSavedText = document.getElementById('checkpointSavedText');
+const toggleBtn = document.getElementById('toggleBtn');
+const toggleLabel = document.getElementById('toggleLabel');
+const statusText = document.getElementById('statusText');
+const coordsText = document.getElementById('coordsText');
+const updatedText = document.getElementById('updatedText');
+const panicBtn = document.getElementById('panicBtn');
+const panicOverlay = document.getElementById('panicOverlay');
+const headerDriverName = document.getElementById('headerDriverName');
+const headerDriverSub = document.getElementById('headerDriverSub');
+const headerShiftDot = document.getElementById('headerShiftDot');
+const nameDisplayRow = document.getElementById('nameDisplayRow');
+const checkpointBtnLabel = document.getElementById('checkpointBtnLabel');
+const turnoBtn = document.getElementById('turnoBtn');
+const turnoReposoStatus = document.getElementById('turnoReposoStatus');
+const reposoBtn = document.getElementById('reposoBtn');
+const unitPickerOverlay = document.getElementById('unitPickerOverlay');
+const unitPickerGrid = document.getElementById('unitPickerGrid');
+const unitPickerEmpty = document.getElementById('unitPickerEmpty');
+const unitPickerSkipBtn = document.getElementById('unitPickerSkipBtn');
 
-const unitDriversOverlay = document.getElementById('unitDriversOverlay');
-const unitDriversTitle = document.getElementById('unitDriversTitle');
-const unitDriversList = document.getElementById('unitDriversList');
-const unitDriversCancelBtn = document.getElementById('unitDriversCancelBtn');
-
-const incidentOverlay = document.getElementById('incidentOverlay');
-const incidentUnitLabel = document.getElementById('incidentUnitLabel');
-const incidentCancelBtn = document.getElementById('incidentCancelBtn');
-const incidentTardeBtn = document.getElementById('incidentTardeBtn');
-const incidentNoPresentoBtn = document.getElementById('incidentNoPresentoBtn');
-
-const pinSubmitBtn = document.getElementById('pinSubmit');
-const backToPinBtn = document.getElementById('backToPinBtn');
-const switchChecadorBtn = document.getElementById('switchChecadorBtn'); // puede no existir, es opcional
-const sendSummaryBtn = document.getElementById('sendSummaryBtn');
-
-let currentChecador = null;
-let driversChannel = null;
-let toastTimer = null;
-let pendingIncidentDriver = null; // objeto {driverId, unitId, driverName, route, ownerId, unitNumber}
-let unitsById = {}; // { unitId: { unit_number, drivers: [...] } }
-
-// ----- PANEL AMPLIADO (mapa + conductores + alertas, como el del dueño) -----
-let map = null;
-let mapInitialized = false;
-let driverMarkers = {};
+let currentDriver = null;
+let watchId = null;
 let locationChannel = null;
-let routeChannel = null;
-let alertChannel = null;
-let driversStatusChannel = null;
-let vueltasChannel = null;
+let eventChannel = null;
 
-let lastDrivers = [];
-let lastRouteEvents = [];
-let lastVueltas = {}; // driver_id -> vueltas de hoy
+// ============================================================
+// ENVÍO CONFIABLE — timeout + reintentos + cola local.
+// Problema que resuelve: con señal mala, las llamadas a Supabase se
+// podían quedar esperando sin límite (botones "trabados"), y si de
+// plano fallaban, el aviso/ubicación se perdía sin más. Con esto:
+//   1) Ninguna llamada espera más de REQUEST_TIMEOUT_MS.
+//   2) Si falla (por señal o lo que sea), se guarda en localStorage
+//      y se reintenta solo — cuando regrese la conexión ('online') o
+//      cada FLUSH_INTERVAL_MS mientras haya pendientes.
+//   3) Nada se pierde silenciosamente: el chip de "Sin señal" en el
+//      header muestra cuántos reportes están esperando.
+// ============================================================
+const RETRY_QUEUE_KEY = 'rss_pending_queue';
+const REQUEST_TIMEOUT_MS = 10000;
+const FLUSH_INTERVAL_MS = 15000;
+
+function withTimeout(promise, ms = REQUEST_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout: sin respuesta del servidor')), ms)),
+  ]);
+}
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(RETRY_QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveQueue(queue) {
+  localStorage.setItem(RETRY_QUEUE_KEY, JSON.stringify(queue));
+  renderSyncIndicator();
+}
+
+// Cada tipo de operación sabe reconstruir su propia llamada a Supabase,
+// así se puede reintentar después aunque haya pasado tiempo o se haya
+// recargado la página.
+function runOp(op) {
+  switch (op.type) {
+    case 'live_location':
+      return supabase.from('live_locations').upsert(op.payload, { onConflict: 'driver_id' });
+    case 'live_location_off':
+      return supabase.from('live_locations').update({ updated_at: null }).eq('driver_id', op.driverId);
+    case 'route_event':
+      return supabase.from('route_events').upsert(op.payload, { onConflict: 'driver_id' });
+    case 'panic_alert':
+      return supabase.from('panic_alerts').insert(op.payload);
+    case 'driver_update':
+      return supabase.from('drivers').update(op.payload).eq('id', op.driverId);
+    default:
+      return Promise.resolve({ error: new Error('tipo de operación desconocido: ' + op.type) });
+  }
+}
+
+// Intenta mandar algo YA. Si falla por red/timeout lo deja en la cola
+// para reintentarlo solo y regresa queued:true — quien llamó puede
+// decidir si avisa "pendiente" o simplemente sigue adelante.
+//
+// IMPORTANTE: cada op lleva una "key" (ej. "route_event:driverId").
+// Antes de mandar o encolar, se quita de la cola cualquier op VIEJO
+// con la misma key. Así, si un reintento atrasado de "Salió de San
+// Simón" sigue esperando turno cuando ya diste "Llegué a San Martín",
+// el reintento viejo se cancela solo en vez de sobrescribir el dato
+// más nuevo cuando por fin le toque su turno.
+function opKey(op) {
+  return op.key || `${op.type}:${op.driverId || op.payload?.driver_id || ''}`;
+}
+
+// Intenta mandar algo YA. Si falla por red/timeout lo deja en la cola
+// para reintentarlo solo y regresa queued:true.
+async function attemptOp(op) {
+  // Limpia cualquier copia vieja en cola de esta misma acción (por si
+  // quedó algo pendiente de antes).
+  saveQueue(loadQueue().filter((q) => q.key !== op.key));
+
+  try {
+    const { error } = await withTimeout(runOp(op));
+    if (!error) return { ok: true, queued: false };
+    console.error(`Error enviando ${op.type}:`, error);
+  } catch (e) {
+    console.error(`Sin respuesta enviando ${op.type} (posible falta de señal):`, e.message || e);
+  }
+
+  const queue = loadQueue();
+  queue.push({ ...op, ts: Date.now() });
+  saveQueue(queue);
+  scheduleFlush(op.type === 'panic_alert' ? 2000 : 4000); // el pánico se reintenta más rápido
+  return { ok: false, queued: true };
+}
+
+// CANDADO POR "KEY": si mandas dos avisos del mismo conductor muy
+// seguido (ej. dos checkpoints casi al mismo tiempo), NUNCA deben
+// viajar juntos a la red — porque internet no garantiza que lleguen
+// en el mismo orden en que los mandaste, y el que llegue AL FINAL es
+// el que se queda guardado (se sobrescriben). Por eso cada key tiene
+// su propia fila: la petición #2 espera a que la #1 termine (aunque
+// tarde hasta el timeout) antes de siquiera salir a la red.
+const pendingChains = {};
+
+function withKeyLock(key, fn) {
+  const prevChain = pendingChains[key] || Promise.resolve();
+  const nextChain = prevChain.then(fn, fn);
+  pendingChains[key] = nextChain.catch(() => {});
+  return nextChain;
+}
+
+async function sendConfiable(op) {
+  const key = opKey(op);
+  op = { ...op, key };
+  return withKeyLock(key, () => attemptOp(op));
+}
+
+let flushTimer = null;
+let flushing = false;
+
+function scheduleFlush(delayMs = FLUSH_INTERVAL_MS) {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => { flushTimer = null; flushQueue(); }, delayMs);
+}
+
+async function flushQueue() {
+  if (flushing) return;
+  const queue = loadQueue();
+  if (!queue.length) { renderSyncIndicator(); return; }
+  flushing = true;
+
+  // También pasa por el mismo candado por key, para que un reintento
+  // de la cola nunca se cruce en el aire con un tap nuevo del usuario
+  // para esa misma acción.
+  await Promise.all(queue.map((op) => withKeyLock(op.key, () => attemptOp(op))));
+  flushing = false;
+
+  const remaining = loadQueue();
+  if (remaining.length) {
+    const hasPanic = remaining.some((o) => o.type === 'panic_alert');
+    scheduleFlush(hasPanic ? 3000 : FLUSH_INTERVAL_MS);
+  }
+}
+
+window.addEventListener('online', () => flushQueue());
+setInterval(() => { if (loadQueue().length) flushQueue(); }, FLUSH_INTERVAL_MS);
+
+// ----- Chip de "Sin señal" en el header -----
+function renderSyncIndicator() {
+  const chip = document.getElementById('syncStatusChip');
+  if (!chip) return;
+  const pending = loadQueue().length;
+  const offline = !navigator.onLine;
+
+  if (!offline && pending === 0) {
+    chip.classList.add('hidden');
+    return;
+  }
+  chip.classList.remove('hidden');
+  chip.textContent = pending > 0
+    ? `Sin señal · ${pending} pendiente${pending === 1 ? '' : 's'}`
+    : 'Sin señal';
+}
+
+window.addEventListener('online', renderSyncIndicator);
+window.addEventListener('offline', renderSyncIndicator);
+
+
+// Wake Lock: evita que la pantalla se apague sola mientras se comparte
+// ubicación. En varios Android, si se apaga la pantalla el sistema es más
+// agresivo pausando todo, así que esto ayuda bastante.
+// El navegador libera el wake lock automáticamente al ocultar la pestaña,
+// por eso lo volvemos a pedir en el listener de "visibilitychange" de abajo.
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
+  } catch (e) {
+    console.warn('No se pudo obtener wake lock:', e);
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try {
+      await wakeLock.release();
+    } catch (e) {
+      // no pasa nada si ya se había liberado solo
+    }
+    wakeLock = null;
+  }
+}
+
+// Recuperación automática: cuando el chofer regresa a la pestaña (venía de
+// otra app, o encendió la pantalla), si la ubicación sigue "encendida" del
+// lado de la UI, reforzamos el wake lock por si el navegador lo soltó.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Capacitor.isNativePlatform()) return;
+  if (!toggleBtn.classList.contains('on')) return;
+
+  if (!wakeLock) requestWakeLock();
+});
 
 // ----- LOGIN CON PIN -----
-on(pinSubmitBtn, 'click', tryPin);
-on(pinInput, 'keydown', (e) => { if (e.key === 'Enter') tryPin(); });
+document.getElementById('pinSubmit').addEventListener('click', tryPin);
+pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPin(); });
 
 async function tryPin() {
   const pin = pinInput.value.trim();
   if (!pin) return;
 
-  const { data: checador, error } = await supabase
-    .from('checadores')
-    .select('*')
+  const { data: driver, error } = await supabase
+    .from('drivers')
+    .select('*, unit:unit_id ( unit_number )')
     .eq('pin', pin)
     .single();
 
-  if (checador && !error) {
-    localStorage.setItem('rss_checador_id', checador.id);
-    localStorage.setItem('rss_checador_session_date', todayKey());
+  if (driver && !error) {
+    driver.unit_number = driver.unit ? driver.unit.unit_number : null;
+    localStorage.setItem('rss_driver_id', driver.id);
+    localStorage.setItem('rss_driver_session_date', todayKey());
     pinError.classList.add('hidden');
     pinInput.value = '';
-    unlock(checador);
+    pinScreen.classList.add('hidden');
+    await promptUnitForToday(driver);
+    unlock(driver);
   } else {
     pinError.classList.remove('hidden');
   }
 }
 
-function unlock(checador) {
-  currentChecador = checador;
-  pinScreen.classList.add('hidden');
-  mainScreen.classList.remove('hidden');
-  mainScreen.classList.add('md:flex');
-  checadorNameText.textContent = checador.name;
-  loadUnits();
-  initRealtime();
-
-  // Notificaciones push forzosas: que le lleguen las alertas aunque tenga
-  // el panel cerrado o el celular bloqueado (requiere que el panel esté
-  // instalado desde Chrome). Ver push-notifications.js para la config.
-  initPushNotifications('checador', checador.id, checador.name);
-
-  // Panel ampliado: conductores + alertas (mismo que ve el dueño).
-  // El mapa incrustado solo se usa en celular; en escritorio "Mapa" abre
-  // mapa-vivo.html en una pestaña aparte, así que ahí no hace falta cargarlo.
-  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-  if (!isDesktop && !mapInitialized) initMap();
-  initFleetRealtimeListeners();
-
-  if (window.lucide) lucide.createIcons();
-}
-
 // ----- SESIÓN DEL DÍA (no volver a pedir PIN mientras sea el mismo día) -----
-// Igual que en conductor-logic.js: mientras siga siendo el mismo día, si
-// recargas la página no te vuelve a pedir el PIN. Al día siguiente, por
-// seguridad, sí se vuelve a pedir (por si cambió el checador de turno).
+// Cada vez que el conductor cierra/reabre la app (o recarga la página), no
+// tiene que volver a escribir su PIN — mientras siga siendo el mismo día.
+// Al día siguiente, por seguridad, sí se le vuelve a pedir (por si cambió
+// de chofer en esa unidad).
 function todayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
 async function tryAutoLogin() {
-  const savedId = localStorage.getItem('rss_checador_id');
-  const savedDate = localStorage.getItem('rss_checador_session_date');
+  const savedId = localStorage.getItem('rss_driver_id');
+  const savedDate = localStorage.getItem('rss_driver_session_date');
   if (!savedId || !savedDate || savedDate !== todayKey()) return;
 
-  const { data: checador, error } = await supabase
-    .from('checadores')
-    .select('*')
+  const { data: driver, error } = await supabase
+    .from('drivers')
+    .select('*, unit:unit_id ( unit_number )')
     .eq('id', savedId)
-    .eq('pin', pin)
     .single();
 
-  if (checador && !error) {
-    unlock(checador);
+  if (driver && !error) {
+    driver.unit_number = driver.unit ? driver.unit.unit_number : null;
+    // Ya contestó "en qué unidad andas hoy" cuando puso su PIN la primera
+    // vez en el día, así que aquí no se lo volvemos a preguntar.
+    unlock(driver);
   } else {
     // El id guardado ya no es válido (p.ej. lo borraron): limpiamos para
     // que la próxima vez sí pida PIN normal.
-    localStorage.removeItem('rss_checador_id');
-    localStorage.removeItem('rss_checador_session_date');
+    localStorage.removeItem('rss_driver_id');
+    localStorage.removeItem('rss_driver_session_date');
+  }
+}
+
+// ----- ¿EN QUÉ UNIDAD ANDAS HOY? -----
+// Se pregunta cada vez que el conductor entra con su PIN, para que el
+// dueño y el checador siempre vean la unidad correcta ese día (útil
+// cuando hay conductores de relevo que no siempre traen la misma combi).
+// No bloquea al conductor si falla la carga o no hay unidades activas.
+async function promptUnitForToday(driver) {
+  return new Promise(async (resolve) => {
+    let units = [];
+    try {
+      const { data, error } = await supabase
+        .from('units')
+        .select('id, unit_number')
+        .neq('active', false)
+        .order('unit_number', { ascending: true });
+      if (error) throw error;
+      units = data || [];
+    } catch (e) {
+      console.error('Error cargando unidades:', e);
+      resolve();
+      return;
+    }
+
+    if (units.length === 0) {
+      resolve();
+      return;
+    }
+
+    unitPickerEmpty.classList.add('hidden');
+    unitPickerGrid.innerHTML = units.map((u) => `
+      <button class="unit-pick-btn ${u.id === driver.unit_id ? 'current' : ''}" data-unit-id="${u.id}">
+        <span>${u.unit_number}</span>
+        ${u.id === driver.unit_id ? '<span class="unit-pick-tag">ACTUAL</span>' : ''}
+      </button>
+    `).join('');
+
+    // Si ya trae una unidad asignada, le damos la opción de continuar
+    // sin volver a tocar nada (por si solo quiere confirmar rápido).
+    unitPickerSkipBtn.classList.toggle('hidden', !driver.unit_id);
+
+    unitPickerOverlay.classList.add('show');
+    if (window.lucide) lucide.createIcons();
+
+    async function finish(unitId) {
+      unitPickerOverlay.classList.remove('show');
+      unitPickerGrid.querySelectorAll('.unit-pick-btn').forEach((b) => b.removeEventListener('click', onBtnClick));
+      unitPickerSkipBtn.removeEventListener('click', onSkipClick);
+
+      if (unitId && unitId !== driver.unit_id) {
+        const { error: updErr } = await supabase.from('drivers').update({ unit_id: unitId }).eq('id', driver.id);
+        if (!updErr) {
+          driver.unit_id = unitId;
+        } else {
+          console.error('Error al guardar la unidad del día:', updErr);
+        }
+      }
+
+      // Guardamos el número de unidad (no solo el id) para poder mostrarlo
+      // en el encabezado sin tener que volver a consultar Supabase.
+      const chosen = units.find((u) => u.id === driver.unit_id);
+      driver.unit_number = chosen ? chosen.unit_number : null;
+
+      resolve();
+    }
+
+    function onBtnClick(e) {
+      if (navigator.vibrate) navigator.vibrate(15);
+      finish(e.currentTarget.dataset.unitId);
+    }
+    function onSkipClick() {
+      finish(driver.unit_id || null);
+    }
+
+    unitPickerGrid.querySelectorAll('.unit-pick-btn').forEach((b) => b.addEventListener('click', onBtnClick));
+    unitPickerSkipBtn.addEventListener('click', onSkipClick);
+  });
+}
+
+function unlock(driver) {
+  currentDriver = driver;
+  pinScreen.classList.add('hidden');
+  mainScreen.classList.remove('hidden');
+  setupDriverNameField();
+  setupDriverRoute();
+  setupCheckpointButton();
+  setupTurnoState();
+  setupReposoState();
+  if (window.lucide) lucide.createIcons();
+
+  // Notificaciones push forzosas (solo cuando el panel corre como PWA
+  // instalada desde Chrome; en la app nativa empacada con Capacitor esto
+  // se maneja con el plugin de notificaciones nativo, no con Web Push).
+  if (!Capacitor.isNativePlatform()) {
+    initPushNotifications('conductor', driver.id, driver.name);
   }
 }
 
 // ----- CIERRE DE SESIÓN -----
 function goToPinScreen() {
-  if (driversChannel) supabase.removeChannel(driversChannel);
+  if (watchId !== null) stopSharing();
   if (locationChannel) supabase.removeChannel(locationChannel);
-  if (routeChannel) supabase.removeChannel(routeChannel);
-  if (alertChannel) supabase.removeChannel(alertChannel);
-  if (driversStatusChannel) supabase.removeChannel(driversStatusChannel);
-  if (vueltasChannel) supabase.removeChannel(vueltasChannel);
-  localStorage.removeItem('rss_checador_id');
-  localStorage.removeItem('rss_checador_session_date');
-  currentChecador = null;
-  lastDrivers = [];
-  lastRouteEvents = [];
-  lastVueltas = {};
-  mapInitialized = false;
-  driverMarkers = {};
-  closeDriverDrawer();
-  closeMobileNav();
+  if (eventChannel) supabase.removeChannel(eventChannel);
+  stopReposoCountdown();
+  reposoUntil = null;
+  localStorage.removeItem('rss_driver_id');
+  localStorage.removeItem('rss_driver_session_date');
+  currentDriver = null;
   mainScreen.classList.add('hidden');
-  mainScreen.classList.remove('md:flex');
   pinScreen.classList.remove('hidden');
   pinInput.value = '';
 }
 
-on(backToPinBtn, 'click', goToPinScreen);
-on(switchChecadorBtn, 'click', goToPinScreen, 'switchChecadorBtn - opcional, normal que no exista');
-on(document.getElementById('logoutBtnDesktop'), 'click', goToPinScreen, 'logoutBtnDesktop');
-on(document.getElementById('logoutBtnMobileNav'), 'click', goToPinScreen, 'logoutBtnMobileNav');
+document.getElementById('backToPinBtn').addEventListener('click', goToPinScreen);
 
-// ----- CARGAR UNIDADES (todas las unidades activas, de todos los dueños) -----
-// Antes esto se armaba solo a partir de "drivers" (uniendo con unit_id), así
-// que cualquier unidad sin conductor asignado nunca aparecía en la cuadrícula.
-// Ahora se parte de la tabla "units" (igual que el panel de admin) y luego se
-// le "cuelgan" los conductores que le tocan, si es que tiene.
-async function loadUnits() {
-  const [{ data: units, error: unitsError }, { data: drivers, error: driversError }] = await Promise.all([
-    supabase.from('units').select('id, unit_number, active').order('unit_number', { ascending: true }),
-    supabase.from('drivers').select('id, name, phone, route, owner_id, unit_id'),
-  ]);
+// ----- NOMBRE DEL CONDUCTOR -----
+// Solo lectura: el conductor no puede editar su nombre desde este panel.
+// Lo asigna el dueño o el checador.
+function updateHeaderDriverName() {
+  if (!headerDriverName) return;
+  const shown = (currentDriver.name || '').trim();
+  headerDriverName.textContent = shown || 'Panel del Conductor';
 
-  if (unitsError || driversError) {
-    console.error('Error cargando unidades:', unitsError || driversError);
-    unitsEmpty.textContent = 'No se pudieron cargar las unidades. Revisa tu conexión.';
-    unitsEmpty.classList.remove('hidden');
-    unitsGrid.innerHTML = '';
-    return;
+  if (headerDriverSub) {
+    const unitTxt = currentDriver.unit_number != null ? `Unidad ${currentDriver.unit_number} · ` : '';
+    headerDriverSub.textContent = `${unitTxt}R-18`;
+    headerDriverSub.classList.remove('hidden');
   }
-
-  renderUnitsGrid(units || [], drivers || []);
 }
 
-function routeColor(route) {
-  return route === 'capilla' ? 'var(--cempasuchil)' : (route === 'secundaria' ? 'var(--agave)' : 'var(--ink-soft)');
+function setupDriverNameField() {
+  updateHeaderDriverName();
 }
 
-function routeLabel(route) {
-  return route === 'capilla' ? 'Por Capilla' : (route === 'secundaria' ? 'Por Secundaria' : 'Sin ramal');
+// ----- RAMAL ASIGNADO -----
+// A partir de ahora el ramal NO se hereda solo de ayer: cada día el chofer
+// tiene que tocar "Por Capilla" o "Por Secundaria" aunque sea el mismo de
+// ayer. Mientras no lo haga, el botón de checkpoint queda bloqueado, para
+// que de una forma u otra quede puesto antes de reportar nada.
+let currentDriverRoute = null;
+const ramalLabel = document.getElementById('ramalLabel');
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-// Parte de TODAS las unidades activas (aunque no tengan conductor asignado
-// todavía) y les cuelga los conductores que les tocan. Una misma unidad puede
-// tener más de un conductor (turnos / días distintos).
-function renderUnitsGrid(units, drivers) {
-  unitsById = {};
-
-  units
-    .filter((u) => u.active !== false && u.unit_number != null)
-    .forEach((u) => {
-      unitsById[u.id] = { unit_number: u.unit_number, drivers: [] };
-    });
-
-  drivers
-    .filter((d) => d.unit_id && unitsById[d.unit_id])
-    .forEach((d) => {
-      unitsById[d.unit_id].drivers.push({
-        driverId: d.id,
-        driverName: d.name || 'Conductor',
-        driverPhone: d.phone || '',
-        route: d.route || '',
-        ownerId: d.owner_id,
-        unitId: d.unit_id,
-        unitNumber: unitsById[d.unit_id].unit_number,
-      });
-    });
-
-  const unitsList = Object.entries(unitsById).map(([id, val]) => ({ id, ...val }));
-  unitsList.sort((a, b) => Number(a.unit_number) - Number(b.unit_number));
-
-  if (unitsList.length === 0) {
-    unitsEmpty.classList.remove('hidden');
-    unitsGrid.innerHTML = '';
-    return;
-  }
-  unitsEmpty.classList.add('hidden');
-
-  unitsGrid.innerHTML = unitsList.map((u) => {
-    const dotColor = u.drivers.length === 1 ? routeColor(u.drivers[0].route) : 'var(--ink-soft)';
-    return `
-      <button class="unit-btn" data-unit-id="${u.id}">
-        <span class="unit-number">${u.unit_number}</span>
-        <span class="unit-dot" style="background:${dotColor};"></span>
-        ${u.drivers.length > 1 ? `<span class="text-[10px] font-display font-semibold" style="color:var(--ink-soft);">${u.drivers.length} choferes</span>` : ''}
-        ${u.drivers.length === 0 ? `<span class="text-[10px] font-display font-semibold" style="color:var(--ink-faint);">Sin conductor</span>` : ''}
-      </button>
-    `;
-  }).join('');
-
-  attachUnitButtonHandlers();
-  if (window.lucide) lucide.createIcons();
+function ramalStorageKey() {
+  return 'rss_driver_route_' + currentDriver.id;
 }
 
-// ----- REALTIME: refrescar la cuadrícula si cambian conductores/ramales/unidades -----
-function initRealtime() {
-  driversChannel = supabase
-    .channel('checador-drivers-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => loadUnits())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'units' }, () => loadUnits())
-    .subscribe();
-}
-
-// ----- TOCAR UNA UNIDAD -> ABRIR LISTA DE CONDUCTORES -----
-function attachUnitButtonHandlers() {
-  document.querySelectorAll('.unit-btn').forEach((btn) => {
-    btn.addEventListener('click', () => openUnitDriversOverlay(btn.dataset.unitId));
+function updateRamalButtons() {
+  document.querySelectorAll('.ramal-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.route === currentDriverRoute);
+    b.classList.toggle('needs-choice', !currentDriverRoute);
   });
-}
-
-function openUnitDriversOverlay(unitId) {
-  const unit = unitsById[unitId];
-  if (!unit) return;
-
-  unitDriversTitle.innerHTML = `<i data-lucide="users"></i> Unidad ${unit.unit_number}`;
-
-  if (unit.drivers.length === 0) {
-    unitDriversList.innerHTML = `<p class="text-sm text-center py-2" style="color:var(--ink-soft);">Esta unidad todavía no tiene conductor asignado.</p>`;
-    unitDriversOverlay.classList.add('show');
-    if (window.lucide) lucide.createIcons();
-    return;
+  if (ramalLabel) {
+    ramalLabel.textContent = currentDriverRoute ? 'Tu ramal hoy' : '⚠ Elige tu ramal de hoy';
+    ramalLabel.classList.toggle('needs-choice', !currentDriverRoute);
   }
+}
 
-  unitDriversList.innerHTML = unit.drivers.map((d, idx) => `
-    <button class="driver-row" data-driver-idx="${idx}">
-      <span class="min-w-0 flex-1 text-left">
-        <span class="driver-name truncate block">${escapeAttr(d.driverName)}</span>
-        ${d.driverPhone ? `<span class="text-[11px] font-mono block" style="color:var(--ink-soft);">${escapeAttr(d.driverPhone)}</span>` : ''}
-      </span>
-      ${d.route ? `<span class="route-badge shrink-0" style="background:color-mix(in srgb, ${routeColor(d.route)} 18%, var(--paper-2)); color:${routeColor(d.route)};">${routeLabel(d.route)}</span>` : ''}
-    </button>
-  `).join('');
+function updateRamalGate() {
+  // Sin ramal elegido HOY, no se puede reportar checkpoint.
+  const blocked = !currentDriverRoute;
+  checkpointBtn.disabled = blocked;
+  checkpointBtn.style.opacity = blocked ? '.45' : '';
+  checkpointBtn.style.pointerEvents = blocked ? 'none' : '';
+}
 
-  // Tocar el nombre del conductor abre directo la hoja de incidencia
-  // (llegó tarde / no se presentó). Ya no hay registro de "pasó a tiempo".
-  unitDriversList.querySelectorAll('.driver-row').forEach((row) => {
-    const driverData = unit.drivers[Number(row.dataset.driverIdx)];
-    row.addEventListener('click', () => {
-      if (navigator.vibrate) navigator.vibrate(15);
-      closeUnitDriversOverlay();
-      openIncidentOverlay(driverData);
-    });
+function setupDriverRoute() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(ramalStorageKey()));
+  } catch (e) {
+    saved = null;
+  }
+  // Solo cuenta si es de HOY; si es de otro día (o no hay nada), se pide
+  // elegir de nuevo aunque currentDriver.route en la base traiga algo viejo.
+  currentDriverRoute = (saved && saved.date === todayStr() && saved.route) ? saved.route : null;
+  updateRamalButtons();
+  updateRamalGate();
+}
+
+function setDriverRoute(route) {
+  currentDriverRoute = route;
+  updateRamalButtons();
+  updateRamalGate();
+  if (navigator.vibrate) navigator.vibrate(15);
+  localStorage.setItem(ramalStorageKey(), JSON.stringify({ route, date: todayStr() }));
+}
+
+document.querySelectorAll('.ramal-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    setDriverRoute(btn.dataset.route);
+
+    const { error } = await supabase
+      .from('drivers')
+      .update({ route: currentDriverRoute })
+      .eq('id', currentDriver.id);
+
+    if (error) console.error('Error actualizando ramal:', error);
   });
-
-  unitDriversOverlay.classList.add('show');
-  if (window.lucide) lucide.createIcons();
-}
-
-function closeUnitDriversOverlay() {
-  unitDriversOverlay.classList.remove('show');
-}
-
-on(unitDriversCancelBtn, 'click', closeUnitDriversOverlay);
-on(unitDriversOverlay, 'click', (e) => {
-  if (e.target.id === 'unitDriversOverlay') closeUnitDriversOverlay();
 });
 
-function escapeAttr(str) {
-  return String(str).replace(/"/g, '&quot;');
+// ----- CHECKPOINTS (SALIÓ / LLEGÓ) -----
+const CHECKPOINTS = [
+  { key: 'salio_san_simon',  label: 'Salí de base San Simón' },
+  { key: 'llego_san_martin', label: 'Llegué a San Martín' },
+  { key: 'salio_san_martin', label: 'Salí de base San Martín' },
+  { key: 'llego_san_simon',  label: 'Llegué a San Simón' },
+];
+
+let checkpointIdx = 0;
+function updateCheckpointButtonLabel() {
+  checkpointBtnLabel.textContent = CHECKPOINTS[checkpointIdx].label;
 }
 
-// ----- REGISTRAR CHECADA -----
-async function registerCheckpoint(driverData, status) {
+function setupCheckpointButton() {
+  const saved = localStorage.getItem('rss_checkpoint_idx_' + currentDriver.id);
+  const parsed = saved !== null ? parseInt(saved, 10) : 0;
+  checkpointIdx = (Number.isInteger(parsed) && parsed >= 0 && parsed < CHECKPOINTS.length) ? parsed : 0;
+  updateCheckpointButtonLabel();
+}
+
+let checkpointSending = false;
+
+checkpointBtn.addEventListener('click', () => {
+  if (checkpointSending) return; // evita doble tap mientras se procesa
+  if (!currentDriverRoute) return; // respaldo: sin ramal elegido hoy, no reporta
+  checkpointSending = true;
+
   if (navigator.vibrate) navigator.vibrate(20);
+  const cp = CHECKPOINTS[checkpointIdx];
 
-  const { driverId, unitId, driverName, route, ownerId, unitNumber } = driverData;
+  // Optimista: avanza al siguiente aviso YA, sin esperar respuesta del
+  // servidor — así el botón nunca se siente atrasado/trabado. El envío
+  // real (con reintentos si hace falta) corre de fondo.
+  checkpointIdx = (checkpointIdx + 1) % CHECKPOINTS.length;
+  localStorage.setItem('rss_checkpoint_idx_' + currentDriver.id, String(checkpointIdx));
+  updateCheckpointButtonLabel();
 
-  const { error } = await supabase
-    .from('checador_events')
-    .insert({
-      checador_id: currentChecador.id,
-      driver_id: driverId,
-      unit_id: unitId,
-      owner_id: ownerId,
-      route: route || null,
-      status,
-    });
+  checkpointSavedText.classList.remove('hidden');
+  checkpointSavedText.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Enviando...';
+  if (window.lucide) lucide.createIcons();
 
-  if (error) {
-    console.error('Error guardando checador_events:', error);
-    showToast(`No se pudo registrar la incidencia de la unidad ${unitNumber}. Intenta de nuevo.`, 'error');
-    return;
-  }
-
-  const time = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-
-  if (status === 'retraso') {
-    showToast(`Unidad ${unitNumber} — ${driverName} — Llegó tarde — ${time}`, 'warn');
-  } else if (status === 'no_se_presento') {
-    showToast(`Unidad ${unitNumber} — ${driverName} — No se presentó — ${time}`, 'warn');
-  }
-}
-
-// ----- TARJETA DE CONFIRMACIÓN (toast) -----
-function showToast(message, kind) {
-  clearTimeout(toastTimer);
-  toastText.textContent = message;
-  toast.classList.remove('ok', 'warn', 'error');
-  toast.classList.add(kind);
-  toast.classList.add('show');
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
-}
-
-// ----- INCIDENCIAS (long-press sobre el nombre del conductor) -----
-function openIncidentOverlay(driverData) {
-  pendingIncidentDriver = driverData;
-  incidentUnitLabel.textContent = `Unidad ${driverData.unitNumber} — ${driverData.driverName}`;
-  incidentOverlay.classList.add('show');
-}
-
-function closeIncidentOverlay() {
-  incidentOverlay.classList.remove('show');
-  pendingIncidentDriver = null;
-}
-
-on(incidentCancelBtn, 'click', closeIncidentOverlay);
-on(incidentOverlay, 'click', (e) => {
-  if (e.target.id === 'incidentOverlay') closeIncidentOverlay();
-});
-on(incidentTardeBtn, 'click', () => {
-  const driverData = pendingIncidentDriver;
-  closeIncidentOverlay();
-  if (driverData) registerCheckpoint(driverData, 'retraso');
-});
-on(incidentNoPresentoBtn, 'click', () => {
-  const driverData = pendingIncidentDriver;
-  closeIncidentOverlay();
-  if (driverData) registerCheckpoint(driverData, 'no_se_presento');
-});
-
-// ============================================================
-// PANEL AMPLIADO — mapa, conductores (turno/reposo/vueltas) y
-// alertas, con el mismo alcance que ve el dueño (todas las
-// unidades/dueños). Pensado para usarse también desde una PC de
-// escritorio con el mapa en grande.
-// ============================================================
-
-// ----- MAPA (Leaflet) -----
-function initMap() {
-  if (mapInitialized) return;
-  map = L.map('map', { zoomControl: true, attributionControl: false }).setView([19.272, -98.455], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-  L.control.attribution({ prefix: false })
-    .addAttribution('© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
-    .addTo(map);
-  mapInitialized = true;
-}
-
-function driverIcon(route) {
-  const color = route === 'secundaria' ? '#2FD98A' : (route === 'capilla' ? '#FFAE33' : '#3FB0F0');
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:34px;height:34px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.45);">🚐</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+  sendConfiable({
+    type: 'route_event',
+    payload: {
+      driver_id: currentDriver.id,
+      event_key: cp.key,
+      label: cp.label,
+      route: currentDriverRoute,
+      created_at: new Date().toISOString(),
+    },
+  }).then(({ queued }) => {
+    checkpointSavedText.innerHTML = queued
+      ? '<i data-lucide="clock" class="w-3.5 h-3.5"></i> Sin señal por ahora — se enviará solo en cuanto regrese.'
+      : '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Reportado. El dueño y el checador ya lo ven.';
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => checkpointSavedText.classList.add('hidden'), queued ? 5000 : 2500);
+    checkpointSending = false;
   });
-}
+});
 
-function goToDriverOnMap(driverId) {
-  const marker = driverMarkers[driverId];
-  if (!map || !marker) return;
-  map._rssCentered = true;
-  map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.75 });
-  marker.openPopup();
-  const mapEl = document.getElementById('map');
-  if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
+// ----- ESTATUS COMPARTIDO (debajo de Turno/Reposo) -----
+// Un solo renglón chiquito: si está en reposo (tiene cuenta regresiva) eso
+// manda, porque es lo más urgente/temporal; si no, muestra el estatus del
+// turno; si no hay nada que avisar, se oculta para no estorbar la vista.
+function renderTurnoReposoStatus() {
+  if (!turnoReposoStatus) return;
 
-// ----- TURNO / REPOSO (lo reporta el propio conductor desde su panel) -----
-function turnoReposoInfo(d) {
-  const restingUntil = d.resting_until ? new Date(d.resting_until) : null;
-  const resting = !!(restingUntil && restingUntil.getTime() > Date.now());
-  return { onShift: !!d.on_shift, resting, restingUntil };
-}
-
-function turnoReposoBadgeHtml(d) {
-  const { onShift, resting, restingUntil } = turnoReposoInfo(d);
-  if (resting) {
-    const mins = Math.max(0, Math.ceil((restingUntil.getTime() - Date.now()) / 60000));
-    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--cempasuchil) 20%, var(--surface)); color:var(--cempasuchil);"><i data-lucide="coffee" class="w-3 h-3"></i> Reposo · ${mins} min</span>`;
+  if (reposoUntil && reposoUntil.getTime() - Date.now() > 0) {
+    const remaining = reposoUntil.getTime() - Date.now();
+    turnoReposoStatus.textContent = 'En reposo · vuelve en ' + formatMMSS(remaining) + ' · toca "Reposo" para cancelar';
+    turnoReposoStatus.classList.remove('hidden');
+  } else if (onShift) {
+    turnoReposoStatus.textContent = 'Turno en curso.';
+    turnoReposoStatus.classList.remove('hidden');
+  } else {
+    turnoReposoStatus.classList.add('hidden');
   }
+}
+
+// ----- TURNO (INICIAR / TERMINAR) -----
+// Es independiente del botón de ubicación: solo lleva registro de cuándo
+// el chofer empieza y termina su jornada. NO prende ni apaga el GPS.
+// Requiere en Supabase, tabla "drivers": columnas on_shift (bool) y
+// shift_started_at (timestamptz).
+let onShift = false;
+
+function renderTurnoBtn() {
   if (onShift) {
-    return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:color-mix(in srgb, var(--agave) 20%, var(--surface)); color:var(--agave);"><i data-lucide="play-circle" class="w-3 h-3"></i> En turno</span>`;
+    turnoBtn.classList.add('on');
+    turnoBtn.innerHTML = 'Terminar<br>mi turno';
+    if (headerShiftDot) headerShiftDot.classList.remove('hidden');
+  } else {
+    turnoBtn.classList.remove('on');
+    turnoBtn.innerHTML = 'Iniciar<br>mi turno';
+    if (headerShiftDot) headerShiftDot.classList.add('hidden');
   }
-  return `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1" style="background:var(--surface-2); color:var(--ink-faint);"><i data-lucide="pause-circle" class="w-3 h-3"></i> Fuera de turno</span>`;
+  renderTurnoReposoStatus();
 }
 
-// ----- VUELTAS DEL DÍA (las asigna el checador aquí mismo) -----
-async function loadVueltasToday() {
-  const today = new Date().toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from('driver_vueltas')
-    .select('driver_id, vueltas')
-    .eq('date', today);
-
-  if (error) { console.error('Error cargando vueltas del día:', error); return; }
-
-  lastVueltas = {};
-  (data || []).forEach((v) => { lastVueltas[v.driver_id] = v.vueltas; });
+function setupTurnoState() {
+  onShift = !!currentDriver.on_shift;
+  renderTurnoBtn();
 }
 
-async function setVueltas(driverId, newValue) {
-  const value = Math.max(0, newValue);
-  const today = new Date().toISOString().slice(0, 10);
+let turnoSending = false;
 
-  const { error } = await supabase
-    .from('driver_vueltas')
-    .upsert({
-      driver_id: driverId,
-      date: today,
-      vueltas: value,
-      updated_by: currentChecador ? currentChecador.id : null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'driver_id,date' });
+turnoBtn.addEventListener('click', async () => {
+  if (turnoSending) return;
+  turnoSending = true;
 
-  if (error) {
-    console.error('Error guardando vueltas:', error);
-    showToast('No se pudo guardar la vuelta. Intenta de nuevo.', 'error');
-    return;
-  }
+  if (navigator.vibrate) navigator.vibrate(20);
+  const startingShift = !onShift;
 
-  lastVueltas[driverId] = value;
-  renderDriversList();
-}
+  const payload = startingShift
+    ? { on_shift: true, shift_started_at: new Date().toISOString() }
+    : { on_shift: false };
 
-function vueltasStepperHtml(driverId) {
-  const n = lastVueltas[driverId] ?? 0;
-  return `
-    <span class="vueltas-stepper" data-driver-id="${driverId}">
-      <button type="button" class="vueltas-minus" aria-label="Quitar una vuelta"><i data-lucide="minus" class="w-3 h-3"></i></button>
-      <span class="vueltas-count">${n}</span>
-      <button type="button" class="vueltas-plus" aria-label="Agregar una vuelta"><i data-lucide="plus" class="w-3 h-3"></i></button>
-    </span>
-  `;
-}
+  // Optimista: se refleja de inmediato en su pantalla (el botón nunca
+  // se siente "trabado"), y de fondo se manda/reintenta solo.
+  onShift = startingShift;
+  currentDriver.on_shift = onShift;
+  renderTurnoBtn();
 
-// ----- REALTIME DEL PANEL AMPLIADO -----
-function initFleetRealtimeListeners() {
-  locationChannel = supabase
-    .channel('checador-locations-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_locations' }, () => renderDriversAndMap())
-    .subscribe((status, err) => console.log('[Realtime] live_locations:', status, err || ''));
-
-  routeChannel = supabase
-    .channel('checador-route-events-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'route_events' }, () => renderRouteEvents())
-    .subscribe((status, err) => console.log('[Realtime] route_events:', status, err || ''));
-
-  alertChannel = supabase
-    .channel('checador-alerts-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'panic_alerts' }, () => renderAlerts())
-    .subscribe((status, err) => console.log('[Realtime] panic_alerts:', status, err || ''));
-
-  driversStatusChannel = supabase
-    .channel('checador-drivers-status-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => renderDriversAndMap())
-    .subscribe((status, err) => console.log('[Realtime] drivers (turno/reposo):', status, err || ''));
-
-  vueltasChannel = supabase
-    .channel('checador-driver-vueltas-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_vueltas' }, () => {
-      loadVueltasToday().then(renderDriversList);
-    })
-    .subscribe((status, err) => console.log('[Realtime] driver_vueltas:', status, err || ''));
-
-  renderDriversAndMap();
-  renderRouteEvents();
-  renderAlerts();
-}
-
-setInterval(() => { if (currentChecador) renderDriversList(); }, 30000);
-
-// ----- CONDUCTORES Y MAPA (todas las unidades, de todos los dueños) -----
-async function renderDriversAndMap() {
-  if (!currentChecador) return;
-
-  const { data: drivers, error } = await supabase
-    .from('drivers')
-    .select(`
-      *,
-      unit:unit_id ( unit_number ),
-      live_location:live_locations ( lat, lng, heading, speed, updated_at )
-    `);
-
-  if (error) { console.error('Error al cargar conductores:', error); return; }
-
-  lastDrivers = drivers || [];
-  await loadVueltasToday();
-  renderDriversList();
-}
-
-function renderDriversList() {
-  const list = document.getElementById('driversList');
-  const emptyMsg = document.getElementById('driversEmpty');
-  if (!list) return;
-  list.innerHTML = '';
-
-  let onlineCount = 0;
-  let restingCount = 0;
-  let vueltasTotal = 0;
-
-  lastDrivers.forEach((d) => {
-    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
-    const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
-    if (fresh) onlineCount++;
-    if (turnoReposoInfo(d).resting) restingCount++;
-    vueltasTotal += (lastVueltas[d.id] ?? 0);
-  });
-
-  const driversOnlineCount = document.getElementById('driversOnlineCount');
-  if (driversOnlineCount) driversOnlineCount.textContent = `${onlineCount} en ruta de ${lastDrivers.length}`;
-
-  const kpiOnRoute = document.getElementById('kpiOnRoute');
-  if (kpiOnRoute) kpiOnRoute.textContent = `${onlineCount}/${lastDrivers.length}`;
-  const kpiReposo = document.getElementById('kpiReposo');
-  if (kpiReposo) kpiReposo.textContent = String(restingCount);
-  const kpiVueltas = document.getElementById('kpiVueltas');
-  if (kpiVueltas) kpiVueltas.textContent = String(vueltasTotal);
-
-  if (lastDrivers.length === 0) {
-    if (emptyMsg) emptyMsg.classList.remove('hidden');
-  } else if (emptyMsg) {
-    emptyMsg.classList.add('hidden');
+  const { queued } = await sendConfiable({ type: 'driver_update', payload, driverId: currentDriver.id });
+  if (queued) {
+    turnoReposoStatus.classList.remove('hidden');
+    turnoReposoStatus.textContent = 'Sin señal — tu turno se confirmará en cuanto regrese la conexión.';
   }
 
-  lastDrivers.forEach((d) => {
-    const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
-    const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
-    const rLabel = routeLabel(d.route);
-    const rColor = routeColor(d.route);
-
-    let locText = 'Sin conexión';
-    if (fresh) {
-      locText = `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
-    } else if (location && location.updated_at) {
-      locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
-    }
-
-    const row = document.createElement('div');
-    row.className = 'fleet-row py-3 flex items-center justify-between gap-1.5 sm:gap-2';
-    row.dataset.driverId = d.id;
-
-    row.innerHTML = `
-      <div class="min-w-0 flex items-center gap-2 sm:gap-2.5 flex-1 cursor-pointer">
-        <span class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 font-display font-bold text-sm" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
-        <div class="min-w-0">
-          <p class="font-display font-semibold text-sm truncate">${d.name} <span class="text-[10px] font-mono" style="color:var(--ink-soft);">(U.${d.unit?.unit_number || '?'})</span></p>
-          ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-[10px] sm:text-[11px] font-mono truncate flex items-center gap-1" style="color:var(--talavera);" onclick="event.stopPropagation()"><i data-lucide="phone" class="w-3 h-3"></i> ${escapeAttr(d.phone)}</a>` : ''}
-          <p class="text-[10px] sm:text-[11px] font-mono truncate" style="color:var(--ink-soft);">${locText}</p>
-          <div class="flex flex-wrap items-center gap-1 mt-1">
-            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block" style="background:${rColor}; color:#08131c;">${rLabel}</span>
-            ${turnoReposoBadgeHtml(d)}
-          </div>
-        </div>
-      </div>
-      <span class="flex flex-col items-end gap-1.5 shrink-0">
-        <span class="flex items-center gap-1.5 text-xs font-semibold"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> <button class="driver-map-btn btn-lift w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:var(--surface-2); border:1px solid var(--border); color:var(--talavera);" title="Ver en el mapa"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i></button></span>
-        ${vueltasStepperHtml(d.id)}
-      </span>
-    `;
-
-    row.querySelector('.min-w-0.flex').addEventListener('click', () => openDriverDrawer(d.id));
-
-    const mapBtn = row.querySelector('.driver-map-btn');
-    mapBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (fresh) goToDriverOnMap(d.id);
-      else showToast(`${d.name}: sin ubicación disponible.`, 'warn');
-    });
-
-    const minusBtn = row.querySelector('.vueltas-minus');
-    const plusBtn = row.querySelector('.vueltas-plus');
-    minusBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (navigator.vibrate) navigator.vibrate(15);
-      setVueltas(d.id, (lastVueltas[d.id] ?? 0) - 1);
-    });
-    plusBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (navigator.vibrate) navigator.vibrate(15);
-      setVueltas(d.id, (lastVueltas[d.id] ?? 0) + 1);
-    });
-
-    list.appendChild(row);
-
-    if (fresh && location && location.lat && location.lng && map) {
-      const latlng = [location.lat, location.lng];
-      if (!driverMarkers[d.id]) {
-        driverMarkers[d.id] = L.marker(latlng, { icon: driverIcon(d.route) }).addTo(map).bindPopup(`${d.name} · ${rLabel}`);
-      } else {
-        driverMarkers[d.id].setLatLng(latlng);
-        driverMarkers[d.id].setPopupContent(`${d.name} · ${rLabel}`);
-      }
-    } else if (driverMarkers[d.id] && map) {
-      map.removeLayer(driverMarkers[d.id]);
-      delete driverMarkers[d.id];
-    }
-  });
-
-  if (map) {
-    const activeMarkers = Object.values(driverMarkers);
-    if (activeMarkers.length > 0 && !map._rssCentered) {
-      const group = L.featureGroup(activeMarkers);
-      map.fitBounds(group.getBounds().pad(0.2));
-      map._rssCentered = true;
-    }
-  }
-
-  if (window.lucide) lucide.createIcons();
-}
-
-// ----- DRAWER: FICHA RÁPIDA DEL CONDUCTOR -----
-const driverDrawer = document.getElementById('driverDrawer');
-const driverDrawerOverlay = document.getElementById('driverDrawerOverlay');
-const driverDrawerContent = document.getElementById('driverDrawerContent');
-
-// Helper para el href de un teléfono (solo dígitos y "+")
-function phoneHref(phone) {
-  return String(phone).replace(/[^\d+]/g, '');
-}
-
-function openDriverDrawer(driverId) {
-  const d = lastDrivers.find((x) => x.id === driverId);
-  if (!d || !driverDrawerContent) return;
-
-  const location = Array.isArray(d.live_location) ? d.live_location[0] : d.live_location;
-  const fresh = location && location.updated_at && (new Date() - new Date(location.updated_at) < 2 * 60 * 1000);
-  const ownEvents = lastRouteEvents.filter((ev) => ev.driver_id === d.id);
-
-  const ownEventsHtml = ownEvents.length
-    ? ownEvents.map((ev) => {
-        const time = ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—';
-        const routeTxt = ev.route === 'capilla' ? 'Por Capilla' : (ev.route === 'secundaria' ? 'Por Secundaria' : '');
-        return `
-          <div class="flex items-center gap-2.5 py-1.5">
-            <span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);"><i data-lucide="flag" class="w-3.5 h-3.5"></i></span>
-            <p class="text-xs" style="color:var(--ink-soft);"><span class="font-semibold" style="color:var(--talavera);">${ev.label || 'Aviso'}</span> · ${time}${routeTxt ? ' · ' + routeTxt : ''}</p>
-          </div>`;
-      }).join('')
-    : `<p class="text-xs" style="color:var(--ink-faint);">Este conductor todavía no ha reportado ninguna parada.</p>`;
-
-  let locText = 'Sin conexión';
-  if (fresh) {
-    locText = `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)} · ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
-  } else if (location && location.updated_at) {
-    locText = `Última vez: ${new Date(location.updated_at).toLocaleTimeString('es-MX')}`;
-  }
-
-  driverDrawerContent.innerHTML = `
-    <div class="flex items-center gap-3">
-      <span class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 font-display font-bold text-lg" style="background:color-mix(in srgb, var(--talavera) 16%, var(--surface)); color:var(--talavera);">${(d.name || '?').trim().charAt(0).toUpperCase()}</span>
-      <div class="min-w-0">
-        <p class="font-display font-semibold text-base truncate">${d.name}</p>
-        <p class="text-xs font-mono" style="color:var(--ink-soft);">Unidad ${d.unit?.unit_number || '?'}</p>
-        ${d.phone ? `<a href="tel:${phoneHref(d.phone)}" class="text-xs font-mono flex items-center gap-1" style="color:var(--talavera);"><i data-lucide="phone" class="w-3.5 h-3.5"></i> ${escapeAttr(d.phone)}</a>` : ''}
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-1.5">
-      <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full" style="background:${routeColor(d.route)}; color:#08131c;">${routeLabel(d.route)}</span>
-      <span class="flex items-center gap-1.5 text-xs font-semibold" style="color:var(--ink-soft);"><span class="status-dot ${fresh ? 'on' : 'off'}"></span> ${fresh ? 'En ruta' : 'Sin conexión'}</span>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-1.5">
-      ${turnoReposoBadgeHtml(d)}
-    </div>
-
-    <div class="card-soft p-3">
-      <p class="text-[10px] font-mono uppercase tracking-wide mb-1" style="color:var(--ink-faint);">Última ubicación</p>
-      <p class="text-xs font-mono" style="color:var(--ink-soft);">${locText}</p>
-    </div>
-
-    <div>
-      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Vueltas de hoy</p>
-      <div class="card-soft p-3 flex items-center justify-between">
-        ${vueltasStepperHtml(d.id)}
-      </div>
-    </div>
-
-    <div>
-      <p class="text-[10px] font-mono uppercase tracking-wide mb-1.5" style="color:var(--ink-faint);">Registros propios del conductor</p>
-      <div class="card-soft p-3">${ownEventsHtml}</div>
-    </div>
-
-    <div class="flex gap-2 pt-1">
-      <button id="drawerGoToMap" class="btn-lift flex-1 text-xs font-semibold px-3.5 py-2.5 rounded-full flex items-center justify-center gap-1.5" style="background:var(--talavera); color:#08131c;" ${fresh ? '' : 'disabled'}>
-        <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver en el mapa
-      </button>
-    </div>
-    ${!fresh ? `<p class="text-[11px] text-center" style="color:var(--ink-faint);">Este conductor no tiene ubicación en vivo disponible.</p>` : ''}
-  `;
-
-  const stepper = driverDrawerContent.querySelector('.vueltas-stepper');
-  if (stepper) {
-    stepper.querySelector('.vueltas-minus').addEventListener('click', () => setVueltas(d.id, (lastVueltas[d.id] ?? 0) - 1).then(() => openDriverDrawer(d.id)));
-    stepper.querySelector('.vueltas-plus').addEventListener('click', () => setVueltas(d.id, (lastVueltas[d.id] ?? 0) + 1).then(() => openDriverDrawer(d.id)));
-  }
-
-  const goBtn = document.getElementById('drawerGoToMap');
-  if (goBtn && fresh) {
-    goBtn.addEventListener('click', () => { closeDriverDrawer(); goToDriverOnMap(d.id); });
-  } else if (goBtn) {
-    goBtn.style.opacity = '.5';
-    goBtn.style.cursor = 'not-allowed';
-  }
-
-  driverDrawer.classList.remove('hidden');
-  driverDrawerOverlay.classList.remove('hidden');
-  void driverDrawer.offsetHeight;
-  driverDrawer.classList.add('open');
-  if (window.lucide) lucide.createIcons();
-}
-
-let drawerCloseTimeout = null;
-function closeDriverDrawer() {
-  if (!driverDrawer) return;
-  driverDrawer.classList.remove('open');
-  driverDrawerOverlay.classList.add('hidden');
-  clearTimeout(drawerCloseTimeout);
-  drawerCloseTimeout = setTimeout(() => driverDrawer.classList.add('hidden'), 300);
-}
-on(document.getElementById('driverDrawerClose'), 'click', closeDriverDrawer);
-on(driverDrawerOverlay, 'click', closeDriverDrawer);
-
-// ----- AVISOS DE RUTA (lo que reporta el propio conductor: salió/llegó) -----
-async function renderRouteEvents() {
-  if (!currentChecador) return;
-
-  const { data: events, error } = await supabase
-    .from('route_events')
-    .select('*, driver:driver_id ( name )')
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  if (error) { console.error('Error cargando route_events:', error); return; }
-
-  lastRouteEvents = events || [];
-  const list = document.getElementById('routeEventsList');
-  if (!list) return;
-
-  if (!events || events.length === 0) {
-    list.innerHTML = `<p id="routeEventsEmpty" class="text-sm text-center" style="color:var(--ink-soft);">Todavía no hay avisos de los conductores hoy.</p>`;
-    return;
-  }
-
-  list.innerHTML = events.map((ev) => `
-    <div class="flex items-center gap-2.5">
-      <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:color-mix(in srgb, var(--agave) 16%, var(--surface)); color:var(--agave);"><i data-lucide="flag" class="w-4 h-4"></i></span>
-      <div class="min-w-0">
-        <p class="font-display font-semibold text-sm truncate">${ev.driver?.name || 'Conductor'} — ${ev.label || 'Aviso'}</p>
-        <p class="text-[11px] font-mono truncate" style="color:var(--ink-soft);">${ev.created_at ? new Date(ev.created_at).toLocaleTimeString('es-MX') : '—'}${ev.route ? ' · ' + (ev.route === 'capilla' ? 'Por Capilla' : 'Por Secundaria') : ''}</p>
-      </div>
-    </div>
-  `).join('');
-  if (window.lucide) lucide.createIcons();
-}
-
-// ----- ALERTAS DE AYUDA -----
-async function renderAlerts() {
-  if (!currentChecador) return;
-
-  const { data: alerts, error } = await supabase
-    .from('panic_alerts')
-    .select('*, driver:driver_id ( name )')
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  if (error) { console.error('Error cargando panic_alerts:', error); return; }
-
-  const list = document.getElementById('alertsList');
-  const empty = document.getElementById('alertsEmpty');
-  if (!list || !empty) return;
-
-  if (!alerts || alerts.length === 0) {
-    empty.classList.remove('hidden');
-    list.innerHTML = '';
-    const alarmBar = document.getElementById('alarmBar');
-    if (alarmBar) alarmBar.classList.remove('show');
-    const kpiAlerts = document.getElementById('kpiAlerts');
-    if (kpiAlerts) kpiAlerts.textContent = '0';
-    return;
-  }
-  empty.classList.add('hidden');
-
-  const pendingCount = alerts.filter((a) => a.status === 'pendiente').length;
-  const kpiAlerts = document.getElementById('kpiAlerts');
-  if (kpiAlerts) kpiAlerts.textContent = String(pendingCount);
-
-  const alarmBar = document.getElementById('alarmBar');
-  if (alarmBar) alarmBar.classList.toggle('show', pendingCount > 0);
-
-  list.innerHTML = alerts.map((a) => {
-    const isPending = a.status === 'pendiente';
-    const mapsUrl = (a.lat != null && a.lng != null) ? `https://www.google.com/maps?q=${a.lat},${a.lng}` : null;
-    return `
-      <div class="alert-card p-4 ${isPending ? '' : 'resolved'}">
-        <div class="flex items-start justify-between gap-2">
-          <div>
-            <p class="font-display font-semibold text-sm flex items-center gap-1.5" style="color:${isPending ? 'var(--alerta)' : 'var(--ink-soft)'};">
-              <i data-lucide="${isPending ? 'siren' : 'check-circle-2'}" class="w-4 h-4"></i> ${isPending ? 'Alerta activa' : 'Atendida'} · ${a.driver?.name || 'Conductor'}
-            </p>
-            <p class="text-xs font-mono mt-0.5" style="color:var(--ink-soft);">${a.created_at ? new Date(a.created_at).toLocaleString('es-MX') : '—'}</p>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-3.5">
-          ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn-lift text-xs font-semibold px-3.5 py-2 rounded-full flex items-center gap-1.5" style="background:var(--talavera); color:#08131c;"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Ver ubicación</a>` : `<span class="text-xs" style="color:var(--ink-soft);">Sin ubicación</span>`}
-          ${isPending ? `<button class="resolve-btn btn-lift text-xs font-semibold px-3.5 py-2 rounded-full" style="background:var(--agave); color:#08131c;" data-id="${a.id}">Marcar atendida</button>` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  list.querySelectorAll('.resolve-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      const { error } = await supabase.from('panic_alerts').update({ status: 'atendida' }).eq('id', btn.dataset.id);
-      if (error) {
-        console.error('Error al marcar alerta como atendida:', error);
-        btn.disabled = false;
-      } else {
-        renderAlerts();
-      }
-    });
-  });
-  if (window.lucide) lucide.createIcons();
-}
-
-on(document.getElementById('silenceBtn'), 'click', () => {
-  const alarmBar = document.getElementById('alarmBar');
-  if (alarmBar) alarmBar.classList.remove('show');
+  turnoSending = false;
 });
 
-// ----- MENÚ MÓVIL (hamburguesa) -----
-const mobileNavOpenBtn = document.getElementById('mobileNavOpen');
-const mobileNavCloseBtn = document.getElementById('mobileNavClose');
-const mobileNavOverlay = document.getElementById('mobileNavOverlay');
-const mobileNavPanel = document.getElementById('mobileNavPanel');
+// ----- REPOSO (15 MIN) -----
+// Nada más es un aviso para el dueño/checador (no es visible al público) y
+// se quita solo pasados 15 minutos. No afecta la ubicación, que se queda
+// prendida todo el tiempo. Requiere en Supabase, tabla "drivers": columna
+// resting_until (timestamptz, nullable).
+const REPOSO_MINUTES = 15;
+let reposoUntil = null;
+let reposoIntervalId = null;
 
-function openMobileNav() {
-  if (!mobileNavOverlay || !mobileNavPanel) return;
-  mobileNavOverlay.classList.remove('hidden');
-  mobileNavPanel.classList.remove('hidden');
-  void mobileNavPanel.offsetHeight;
-  mobileNavPanel.classList.add('open');
+function formatMMSS(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + String(s).padStart(2, '0');
 }
 
-let mobileNavCloseTimeout = null;
-function closeMobileNav() {
-  if (!mobileNavOverlay || !mobileNavPanel) return;
-  mobileNavPanel.classList.remove('open');
-  mobileNavOverlay.classList.add('hidden');
-  clearTimeout(mobileNavCloseTimeout);
-  mobileNavCloseTimeout = setTimeout(() => mobileNavPanel.classList.add('hidden'), 300);
+function renderReposoBtn() {
+  const remaining = reposoUntil ? reposoUntil.getTime() - Date.now() : 0;
+
+  if (reposoUntil && remaining > 0) {
+    reposoBtn.classList.add('active');
+    reposoBtn.innerHTML = formatMMSS(remaining) + '<br>cancelar';
+  } else {
+    reposoBtn.classList.remove('active');
+    reposoBtn.innerHTML = 'Marcar<br>reposo';
+  }
+  renderTurnoReposoStatus();
 }
 
-on(mobileNavOpenBtn, 'click', openMobileNav);
-on(mobileNavCloseBtn, 'click', closeMobileNav);
-on(mobileNavOverlay, 'click', closeMobileNav);
-document.querySelectorAll('#mobileNavPanel a.mobile-nav-item').forEach((a) => {
-  a.addEventListener('click', closeMobileNav);
-});
-
-// ----- NAVEGACIÓN: marcar el enlace activo según la sección visible -----
-const navLinks = Array.from(document.querySelectorAll('aside .nav-item, #mobileNavPanel .mobile-nav-item'))
-  .filter((a) => a.getAttribute('href').startsWith('#'));
-if (navLinks.length) {
-  const sectionIds = [...new Set(navLinks.map((a) => a.getAttribute('href').slice(1)))];
-  const sections = sectionIds.map((id) => document.getElementById(id)).filter(Boolean);
-
-  const navObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id;
-        navLinks.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
-      }
-    });
-  }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
-
-  sections.forEach((sec) => navObserver.observe(sec));
+function stopReposoCountdown() {
+  if (reposoIntervalId !== null) {
+    clearInterval(reposoIntervalId);
+    reposoIntervalId = null;
+  }
 }
 
-// ----- VUELTAS DEL DÍA -> PDF DESCARGABLE -----
-on(sendSummaryBtn, 'click', downloadDaySummaryPdf);
-
-// Espera hasta `timeoutMs` a que window.jspdf esté disponible, revisando cada 250ms.
-// Sirve para cuando el CDN tarda en responder por mala señal, en vez de fallar
-// de inmediato en el primer intento.
-function waitForJsPdf(timeoutMs = 4000) {
-  return new Promise((resolve) => {
-    if (window.jspdf && window.jspdf.jsPDF) return resolve(true);
-    const startedAt = Date.now();
-    const interval = setInterval(() => {
-      if (window.jspdf && window.jspdf.jsPDF) {
-        clearInterval(interval);
-        resolve(true);
-      } else if (Date.now() - startedAt > timeoutMs) {
-        clearInterval(interval);
-        resolve(false);
-      }
-    }, 250);
-  });
+async function clearReposo() {
+  stopReposoCountdown();
+  reposoUntil = null;
+  renderReposoBtn();
+  await sendConfiable({ type: 'driver_update', payload: { resting_until: null }, driverId: currentDriver.id });
 }
 
-async function downloadDaySummaryPdf() {
-  if (!currentChecador) return;
-
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    // No está listo todavía: puede que el CDN siga cargando por señal lenta.
-    // Le damos unos segundos antes de darnos por vencidos.
-    showToast('Preparando el generador de PDF…', 'warn');
-    const ready = await waitForJsPdf();
-    if (!ready) {
-      showToast('No se pudo cargar el generador de PDF. Revisa tu conexión e intenta de nuevo.', 'error');
+function startReposoCountdown() {
+  stopReposoCountdown();
+  reposoIntervalId = setInterval(() => {
+    if (!reposoUntil || reposoUntil.getTime() - Date.now() <= 0) {
+      clearReposo();
       return;
     }
-  }
-
-  sendSummaryBtn.disabled = true;
-  const originalHtml = sendSummaryBtn.innerHTML;
-  sendSummaryBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4"></i> Armando PDF…';
-  if (window.lucide) lucide.createIcons();
-
-  const now = new Date();
-  const todayLabel = now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const todayFile = now.toISOString().slice(0, 10); // YYYY-MM-DD
-
-  // ----- VUELTAS POR CONDUCTOR (asignadas por el checador, hoy) — lo único que va en el PDF -----
-  const { data: vueltasRows, error: vueltasError } = await supabase
-    .from('driver_vueltas')
-    .select('vueltas, driver:driver_id ( name, unit:unit_id ( unit_number ) )')
-    .eq('date', todayFile)
-    .order('vueltas', { ascending: false });
-
-  sendSummaryBtn.disabled = false;
-  sendSummaryBtn.innerHTML = originalHtml;
-  if (window.lucide) lucide.createIcons();
-
-  if (vueltasError) {
-    console.error('Error cargando vueltas para el PDF:', vueltasError);
-    showToast('No se pudo armar el resumen. Intenta de nuevo.', 'error');
-    return;
-  }
-
-  if (!vueltasRows || vueltasRows.length === 0) {
-    showToast('Todavía no hay vueltas registradas hoy para descargar.', 'warn');
-    return;
-  }
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.setTextColor(14, 128, 190); // azul talavera
-  doc.text('Vueltas del día · Ruta San Simón (R-18)', 14, 18);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(90, 82, 68);
-  doc.text(`Checador: ${currentChecador.name}`, 14, 26);
-  doc.text(`Fecha: ${todayLabel}`, 14, 32);
-
-  const vueltasBody = vueltasRows.map((v) => [
-    v.driver?.unit?.unit_number != null ? `Unidad ${v.driver.unit.unit_number}` : 'Unidad —',
-    v.driver?.name || 'Conductor',
-    String(v.vueltas ?? 0),
-  ]);
-  const vueltasTotal = vueltasRows.reduce((sum, v) => sum + (v.vueltas || 0), 0);
-
-  doc.autoTable({
-    head: [['Unidad', 'Conductor', 'Vueltas']],
-    body: vueltasBody,
-    startY: 38,
-    styles: { font: 'helvetica', fontSize: 10, cellPadding: 3 },
-    headStyles: { fillColor: [30, 158, 90], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [244, 238, 220] },
-    columnStyles: { 2: { halign: 'center', fontStyle: 'bold' } },
-  });
-
-  const finalY = doc.lastAutoTable.finalY || 38;
-  doc.setFontSize(10);
-  doc.setTextColor(90, 82, 68);
-  doc.text(`Total de vueltas hoy (todos los conductores): ${vueltasTotal}`, 14, finalY + 8);
-
-  doc.save(`vueltas-checador-${todayFile}.pdf`);
+    renderReposoBtn();
+  }, 1000);
 }
 
-// ----- INTENTAR ENTRAR DIRECTO SI YA HABÍA SESIÓN GUARDADA DE HOY -----
+function setupReposoState() {
+  const saved = currentDriver.resting_until ? new Date(currentDriver.resting_until) : null;
+  if (saved && saved.getTime() > Date.now()) {
+    reposoUntil = saved;
+    renderReposoBtn();
+    startReposoCountdown();
+  } else {
+    reposoUntil = null;
+    renderReposoBtn();
+  }
+}
+
+reposoBtn.addEventListener('click', async () => {
+  if (navigator.vibrate) navigator.vibrate(20);
+
+  // Si ya está en reposo, tocar el botón lo cancela antes de tiempo.
+  if (reposoUntil) {
+    await clearReposo();
+    return;
+  }
+
+  const until = new Date(Date.now() + REPOSO_MINUTES * 60 * 1000);
+
+  // Optimista: arranca la cuenta regresiva de una vez, no hasta que
+  // confirme el servidor.
+  currentDriver.resting_until = until.toISOString();
+  reposoUntil = until;
+  renderReposoBtn();
+  startReposoCountdown();
+
+  await sendConfiable({ type: 'driver_update', payload: { resting_until: until.toISOString() }, driverId: currentDriver.id });
+});
+
+// ----- UBICACIÓN EN VIVO -----
+let bgWatcherId = null; // id del watcher nativo (solo se usa dentro de la app empacada)
+
+async function guardarUbicacion(latitude, longitude, heading, speed) {
+  const now = Date.now();
+  coordsText.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  updatedText.textContent = new Date(now).toLocaleTimeString('es-MX');
+
+  const { queued } = await sendConfiable({
+    type: 'live_location',
+    payload: {
+      driver_id: currentDriver.id,
+      lat: latitude,
+      lng: longitude,
+      heading: heading ?? null,
+      speed: speed ?? null,
+      updated_at: new Date().toISOString(),
+    },
+  });
+
+  // No mostramos error duro aquí: si se encoló, el chip de "Sin señal"
+  // ya le avisa al conductor, y el siguiente watchPosition (o el
+  // reintento automático) lo va a mandar solo en cuanto haya señal.
+  if (!queued) {
+    statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
+  }
+}
+
+// --- Ruta de navegador normal (sin cambios respecto al código original) ---
+function onPos(pos) {
+  const { latitude, longitude, heading, speed } = pos.coords;
+  guardarUbicacion(latitude, longitude, heading, speed);
+}
+
+function onPosError(err) {
+  let msg = 'No se pudo obtener tu ubicación.';
+  if (err.code === err.PERMISSION_DENIED) msg = 'Activa el permiso de ubicación de este sitio.';
+  statusText.textContent = msg;
+  stopSharing();
+}
+
+// --- Ruta nativa (Android empacado con Capacitor) ---
+async function startSharingNative() {
+  if (!BackgroundGeolocation) {
+    console.error('Plugin BackgroundGeolocation no disponible en window.Capacitor.Plugins');
+    statusText.textContent = 'No se encontró el módulo de ubicación nativo. Reinstala la app.';
+    return;
+  }
+  try {
+    bgWatcherId = await BackgroundGeolocation.addWatcher(
+      {
+        backgroundMessage: 'Ruta San Simón está compartiendo tu ubicación',
+        backgroundTitle: 'Compartiendo ubicación',
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: 10, // metros; baja este número si quieres updates más seguidos
+      },
+      (location, error) => {
+        if (error) {
+          console.error('Error de background-geolocation:', error);
+          if (error.code === 'NOT_AUTHORIZED') {
+            statusText.textContent = 'Activa el permiso de ubicación "Todo el tiempo" en Ajustes.';
+          } else {
+            statusText.textContent = 'No se pudo obtener tu ubicación.';
+          }
+          stopSharing();
+          return;
+        }
+        if (location) {
+          guardarUbicacion(location.latitude, location.longitude, location.bearing, location.speed);
+        }
+      }
+    );
+
+    toggleBtn.classList.add('on');
+    toggleLabel.innerHTML = 'Ubicación<br>activa';
+    statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
+  } catch (e) {
+    console.error('No se pudo iniciar background-geolocation:', e);
+    statusText.textContent = 'No se pudo activar la ubicación (revisa permisos en Ajustes).';
+  }
+}
+
+async function stopSharingNative() {
+  if (bgWatcherId !== null) {
+    try {
+      await BackgroundGeolocation.removeWatcher({ id: bgWatcherId });
+    } catch (e) {
+      console.error('Error quitando watcher nativo:', e);
+    }
+    bgWatcherId = null;
+  }
+}
+
+// --- Función pública que usa el botón: decide navegador vs nativo ---
+function startSharing() {
+  if (navigator.vibrate) navigator.vibrate(20);
+
+  if (Capacitor.isNativePlatform()) {
+    startSharingNative();
+    return;
+  }
+
+  // Navegador normal (sin cambios)
+  if (!navigator.geolocation) {
+    statusText.textContent = 'Tu navegador no soporta geolocalización.';
+    return;
+  }
+
+  toggleBtn.classList.add('on');
+  toggleLabel.innerHTML = 'Ubicación<br>activa';
+  statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
+
+  watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
+    enableHighAccuracy: true,
+    maximumAge: 5000,
+    timeout: 15000,
+  });
+
+  requestWakeLock();
+}
+
+async function stopSharing() {
+  if (Capacitor.isNativePlatform()) {
+    await stopSharingNative();
+  } else if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    releaseWakeLock();
+  }
+
+  toggleBtn.classList.remove('on');
+  toggleLabel.innerHTML = 'Encender<br>ubicación';
+  statusText.textContent = 'Presiona el botón para activar tu ubicación en el mapa.';
+
+  await sendConfiable({ type: 'live_location_off', driverId: currentDriver.id });
+}
+
+toggleBtn.addEventListener('click', () => {
+  if (toggleBtn.classList.contains('on')) stopSharing();
+  else startSharing();
+});
+
+// ----- BOTÓN DE AYUDA / PÁNICO -----
+function openPanic() {
+  // Siempre se abre desde el paso de confirmar, sin importar cómo haya
+  // quedado la vez anterior (enviado, encolado, etc.) — así el botón
+  // de pánico se puede volver a usar las veces que haga falta, sin
+  // tener que cerrar sesión.
+  document.getElementById('panicStepAsk').classList.remove('hidden');
+  document.getElementById('panicStepSent').classList.add('hidden');
+  document.getElementById('panicStepError').classList.add('hidden');
+  panicOverlay.classList.add('show');
+}
+function closePanic() { panicOverlay.classList.remove('show'); }
+
+panicBtn.addEventListener('click', () => {
+  if (navigator.vibrate) navigator.vibrate(20);
+  openPanic();
+});
+
+document.getElementById('panicCancelBtn').addEventListener('click', closePanic);
+document.getElementById('panicCloseBtn').addEventListener('click', closePanic);
+document.getElementById('panicErrorCloseBtn').addEventListener('click', closePanic);
+panicOverlay.addEventListener('click', (e) => {
+  if (e.target.id === 'panicOverlay') closePanic();
+});
+
+document.getElementById('panicConfirmBtn').addEventListener('click', () => {
+  if (navigator.vibrate) navigator.vibrate([40, 30, 40, 30, 60]);
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendPanicAlert(pos.coords.latitude, pos.coords.longitude),
+      () => sendPanicAlert(null, null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  } else {
+    sendPanicAlert(null, null);
+  }
+});
+
+async function sendPanicAlert(lat, lng) {
+  const { queued } = await sendConfiable({
+    type: 'panic_alert',
+    payload: {
+      driver_id: currentDriver.id,
+      owner_id: currentDriver.owner_id,
+      unit_id: currentDriver.unit_id || null,
+      lat: lat,
+      lng: lng,
+      status: 'pendiente',
+    },
+  });
+
+  document.getElementById('panicStepAsk').classList.add('hidden');
+
+  if (queued) {
+    // No se pudo confirmar de inmediato por falta de señal, pero se
+    // sigue reintentando solo de fondo cada pocos segundos hasta salir.
+    document.getElementById('panicStepError').classList.remove('hidden');
+  } else {
+    document.getElementById('panicStepSent').classList.remove('hidden');
+  }
+}
+
+// ----- ARRANQUE: si ya había sesión abierta hoy, entra directo sin PIN -----
+renderSyncIndicator();
+flushQueue(); // por si quedó algo pendiente de la sesión anterior (batería, cierre abrupto, etc.)
 tryAutoLogin();

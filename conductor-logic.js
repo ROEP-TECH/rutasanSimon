@@ -124,6 +124,7 @@ async function tryAutoLogin() {
     .from('checadores')
     .select('*')
     .eq('id', savedId)
+    .eq('pin', pin)
     .single();
 
   if (checador && !error) {

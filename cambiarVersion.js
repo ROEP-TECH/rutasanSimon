@@ -3,7 +3,7 @@
   // ============================================================
   (function() {
     // --- Versión actual y changelog ---
-    const APP_VERSION = '0.5';
+    const APP_VERSION = '1.0';
     const CHANGELOG = [
       'Corregido: el checador ya no se deslogea solo al recargar la página — se queda con la sesión iniciada igual que el conductor, hasta el día siguiente.',
       'Ahora hay que elegir tu ramal (Capilla/Secundaria) cada día antes de poder reportar checkpoints.',

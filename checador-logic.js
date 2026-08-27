@@ -73,6 +73,7 @@ async function tryPin() {
 
   if (checador && !error) {
     localStorage.setItem('rss_checador_id', checador.id);
+    localStorage.setItem('rss_checador_session_date', todayKey());
     pinError.classList.add('hidden');
     pinInput.value = '';
     unlock(checador);
@@ -105,6 +106,36 @@ function unlock(checador) {
   if (window.lucide) lucide.createIcons();
 }
 
+// ----- SESIÓN DEL DÍA (no volver a pedir PIN mientras sea el mismo día) -----
+// Igual que en conductor-logic.js: mientras siga siendo el mismo día, si
+// recargas la página no te vuelve a pedir el PIN. Al día siguiente, por
+// seguridad, sí se vuelve a pedir (por si cambió el checador de turno).
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+async function tryAutoLogin() {
+  const savedId = localStorage.getItem('rss_checador_id');
+  const savedDate = localStorage.getItem('rss_checador_session_date');
+  if (!savedId || !savedDate || savedDate !== todayKey()) return;
+
+  const { data: checador, error } = await supabase
+    .from('checadores')
+    .select('*')
+    .eq('id', savedId)
+    .single();
+
+  if (checador && !error) {
+    unlock(checador);
+  } else {
+    // El id guardado ya no es válido (p.ej. lo borraron): limpiamos para
+    // que la próxima vez sí pida PIN normal.
+    localStorage.removeItem('rss_checador_id');
+    localStorage.removeItem('rss_checador_session_date');
+  }
+}
+
 // ----- CIERRE DE SESIÓN -----
 function goToPinScreen() {
   if (driversChannel) supabase.removeChannel(driversChannel);
@@ -114,6 +145,7 @@ function goToPinScreen() {
   if (driversStatusChannel) supabase.removeChannel(driversStatusChannel);
   if (vueltasChannel) supabase.removeChannel(vueltasChannel);
   localStorage.removeItem('rss_checador_id');
+  localStorage.removeItem('rss_checador_session_date');
   currentChecador = null;
   lastDrivers = [];
   lastRouteEvents = [];
@@ -1007,3 +1039,6 @@ async function downloadDaySummaryPdf() {
 
   doc.save(`vueltas-checador-${todayFile}.pdf`);
 }
+
+// ----- INTENTAR ENTRAR DIRECTO SI YA HABÍA SESIÓN GUARDADA DE HOY -----
+tryAutoLogin();

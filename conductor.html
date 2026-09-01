@@ -106,10 +106,21 @@
     background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%);
     border-color:var(--agave-dark); color:#052414; box-shadow: 0 20px 50px -14px var(--agave-glow);
   }
-  #toggleBtn.on .pulseDot{ animation: pulse 1.4s ease-out infinite; }
+  /* Antes: animaba box-shadow, que no es "GPU-compositable" y obliga al
+     navegador a repintar esa zona en cada fotograma mientras el botón
+     está "on" (o sea, durante todo el turno). Ahora: mismo efecto visual,
+     pero animando transform+opacity en un pseudo-elemento, que sí corre
+     en la capa de composición (GPU) sin repintar constantemente. */
+  #toggleBtn.on .pulseDot{ position:relative; }
+  #toggleBtn.on .pulseDot::after{
+    content:'';
+    position:absolute; inset:0; border-radius:50%;
+    background:rgba(5,36,20,.4);
+    animation: pulse 1.4s ease-out infinite;
+  }
   @keyframes pulse{
-    0%{ box-shadow:0 0 0 0 rgba(5,36,20,.4); }
-    100%{ box-shadow:0 0 0 16px rgba(5,36,20,0); }
+    0%{ transform:scale(1); opacity:.4; }
+    100%{ transform:scale(1.6); opacity:0; }
   }
   .pulseDot{ width:26px; height:26px; border-radius:50%; background:var(--surface-2); margin-bottom:10px; display:flex; align-items:center; justify-content:center; }
   #toggleBtn:not(.on) .pulseDot [data-lucide]{ width:14px; height:14px; color:var(--ink-soft); }
@@ -176,11 +187,17 @@
   .ramal-btn:not(.active):hover{ border-color:var(--talavera); color:var(--ink); transform: translateY(-1px); }
   .ramal-btn.active[data-route="capilla"]{ background: linear-gradient(155deg, var(--cempasuchil) 0%, var(--cempasuchil-dark) 100%); border-color:var(--cempasuchil-dark); color:#1b1002; box-shadow:var(--shadow); }
   .ramal-btn.active[data-route="secundaria"]{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%); border-color:var(--agave-dark); color:#052414; box-shadow:var(--shadow); }
-  .ramal-btn.needs-choice{ border-color:var(--talavera); animation: ramalPulse 1.6s ease-in-out infinite; }
+  .ramal-btn.needs-choice{ border-color:var(--talavera); position:relative; }
+  .ramal-btn.needs-choice::after{
+    content:'';
+    position:absolute; inset:0; border-radius:inherit;
+    box-shadow: 0 0 0 5px rgba(214,84,64,.35);
+    animation: ramalPulse 1.6s ease-in-out infinite;
+  }
   #ramalLabel.needs-choice{ color:var(--talavera); font-weight:700; }
   @keyframes ramalPulse{
-    0%, 100% { box-shadow: 0 0 0 0 rgba(214,84,64,.35); }
-    50% { box-shadow: 0 0 0 5px rgba(214,84,64,0); }
+    0%, 100% { transform: scale(1); opacity:1; }
+    50% { transform: scale(1.03); opacity:0; }
   }
 
   #turnoBtn.on{ background: linear-gradient(155deg, var(--agave) 0%, var(--agave-dark) 100%) !important; color:#052414 !important; }

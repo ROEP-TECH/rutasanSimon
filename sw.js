@@ -6,7 +6,7 @@
       notificación del sistema, aunque la pestaña/app esté cerrada y el
       celular bloqueado o en reposo. */
 
-const CACHE_NAME = 'ruta-san-simon-v11';
+const CACHE_NAME = 'ruta-san-simon-v12'; // v11 -> v12: fuerza refresco inmediato tras el fix de GPS/batería
 const APP_SHELL = [
   './',
   './index.html',

@@ -3,8 +3,9 @@
   // ============================================================
   (function() {
     // --- Versión actual y changelog ---
-    const APP_VERSION = '0.4';
+    const APP_VERSION = '0.5';
     const CHANGELOG = [
+      'La app ahora calienta menos el teléfono y gasta menos batería mientras compartes tu ubicación.',
       'Ahora hay que elegir tu ramal (Capilla/Secundaria) cada día antes de poder reportar checkpoints.',
       'Corregido: el panel de dueño/checador ya no se queda con avisos viejos — ya no hace falta refrescar para verlos.',
       'Corrección de errores menores.',

@@ -35,7 +35,8 @@ const unitPickerEmpty = document.getElementById('unitPickerEmpty');
 const unitPickerSkipBtn = document.getElementById('unitPickerSkipBtn');
 
 let currentDriver = null;
-let watchId = null;
+let watchId = null; // se sigue usando como "bandera" de que hay tracking activo en modo navegador
+let pollIntervalId = null;
 let locationChannel = null;
 let eventChannel = null;
 
@@ -872,6 +873,16 @@ async function stopSharingNative() {
   }
 }
 
+const POLL_INTERVAL_MS = 10000; // cada cuánto se pide una lectura de GPS nueva
+
+function pollPosition() {
+  navigator.geolocation.getCurrentPosition(onPos, onPosError, {
+    enableHighAccuracy: true,
+    maximumAge: 8000,
+    timeout: 9000,
+  });
+}
+
 // --- Función pública que usa el botón: decide navegador vs nativo ---
 function startSharing() {
   if (navigator.vibrate) navigator.vibrate(20);
@@ -897,11 +908,20 @@ function startSharing() {
   toggleLabel.innerHTML = 'Ubicación<br>activa';
   statusText.textContent = 'Tu combi ya está en tiempo real en el mapa.';
 
-  watchId = navigator.geolocation.watchPosition(onPos, onPosError, {
-    enableHighAccuracy: true,
-    maximumAge: 5000,
-    timeout: 15000,
-  });
+  // Antes usábamos watchPosition, que en muchos Android pide una lectura
+  // nueva de GPS de alta precisión cada 1-5 seg SIN PARAR — aunque el
+  // throttle de abajo (debeMandarAhora) solo mande 1 de cada 2-3 al
+  // servidor, el chip de GPS y la pantalla (por el wake lock) se quedan
+  // trabajando sin descanso durante todo el turno, y eso es lo que
+  // calienta el teléfono y drena la pila.
+  //
+  // Ahora pedimos una lectura cada POLL_INTERVAL_MS en vez de dejar que
+  // el navegador dispare lecturas tan seguido como pueda. Como igual solo
+  // mandamos a Supabase cada 8-20 seg, no perdemos nada de "tiempo real"
+  // en el mapa, pero el GPS descansa entre lectura y lectura.
+  watchId = 'polling'; // solo como bandera de "hay tracking activo"
+  pollPosition();
+  pollIntervalId = setInterval(pollPosition, POLL_INTERVAL_MS);
 
   requestWakeLock();
 }
@@ -910,7 +930,10 @@ async function stopSharing() {
   if (Capacitor.isNativePlatform()) {
     await stopSharingNative();
   } else if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
+    if (pollIntervalId !== null) {
+      clearInterval(pollIntervalId);
+      pollIntervalId = null;
+    }
     watchId = null;
     releaseWakeLock();
   }

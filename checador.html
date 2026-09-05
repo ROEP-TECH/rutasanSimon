@@ -43,6 +43,43 @@
 <script type="module" src="checador-logic.js"></script>
 
 <style>
+    /* ===== MODAL DE AVISO DE PRIVACIDAD ===== */
+  #privacyOverlay {
+    position: fixed; inset: 0; z-index: 95;
+    background: rgba(5,7,10,0.72);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 1.5rem;
+  }
+  #privacyOverlay.show { display: flex; }
+  #privacySheet {
+    width: 100%; max-width: 26rem; max-height: 80vh; overflow-y: auto;
+    background: var(--surface); border-radius: 1.75rem; padding: 1.5rem;
+    border: 1px solid var(--border); box-shadow: var(--shadow-md);
+  }
+  #privacySheet h3 {
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.1rem;
+    margin-bottom: .75rem; color: var(--ink);
+  }
+  #privacySheet h4 {
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .85rem;
+    margin-top: 1rem; margin-bottom: .25rem; color: var(--talavera);
+  }
+  #privacySheet p, #privacySheet li { font-size: .82rem; line-height: 1.5; color: var(--ink-soft); }
+  #privacySheet ul { padding-left: 1.1rem; margin: .25rem 0; }
+  .privacy-link-btn {
+    background: transparent; border: none; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-faint); text-decoration: underline;
+    cursor: pointer; padding: .25rem;
+  }
+  .privacy-link-btn:hover { color: var(--talavera); }
+  #privacyCloseBtn {
+    margin-top: 1.25rem; width: 100%; padding: .75rem; border-radius: 1rem;
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .9rem;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    cursor: pointer; transition: all .2s;
+  }
+  #privacyCloseBtn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
   /* ===== TOKENS — mismo lenguaje visual que el Panel del Dueño ===== */
   :root{
     --canvas:#0A0E13; --surface:#11161D; --surface-2:#171E27; --surface-3:#1D2530;
@@ -268,6 +305,7 @@
            style="background:var(--surface-2); border-color:var(--border); color:var(--ink);">
     <p id="pinError" class="text-sm mt-2 hidden" style="color:var(--alerta);">PIN incorrecto, intenta otra vez.</p>
     <button id="pinSubmit" class="btn-lift mt-4 w-full py-3 rounded-2xl font-display font-semibold" style="background:linear-gradient(155deg, var(--talavera) 0%, var(--talavera-dark) 100%); color:#08131c;">Entrar</button>
+  <button class="privacy-link-btn mt-4" type="button">Aviso de privacidad</button>
   </div>
 </div>
 
@@ -302,6 +340,7 @@
 
     <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
       <button id="logoutBtnDesktop" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
+        <button class="privacy-link-btn mt-2 w-full text-center" type="button">Aviso de privacidad</button>
         <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
       </button>
     </div>
@@ -437,6 +476,7 @@
   <div class="mt-auto pt-3 border-t" style="border-color:var(--border);">
     <button id="logoutBtnMobileNav" class="btn-lift w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--border);">
       <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar sesión
+      <button class="privacy-link-btn mt-2 w-full text-center" type="button">Aviso de privacidad</button>
     </button>
   </div>
 </aside>
@@ -477,6 +517,41 @@
       <button id="incidentNoPresentoBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm" style="background:linear-gradient(155deg, var(--alerta) 0%, var(--alerta-dark) 100%); color:#fff;">No se presentó</button>
       <button id="incidentCancelBtn" class="btn-lift w-full py-3 rounded-2xl font-display font-semibold text-sm placard">Cancelar</button>
     </div>
+  </div>
+</div>
+<!-- ===== MODAL DE AVISO DE PRIVACIDAD ===== -->
+<div id="privacyOverlay">
+  <div id="privacySheet">
+    <h3>Aviso de Privacidad</h3>
+    <p>Ruta San Simón (R-18) es responsable del tratamiento de tus datos personales como checador, y de los datos que este panel procesa sobre los conductores, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares.</p>
+
+    <h4>Datos que recabamos de ti (checador)</h4>
+    <ul>
+      <li>Nombre y PIN de acceso (credencial)</li>
+    </ul>
+
+    <h4>Datos que este panel muestra de los conductores</h4>
+    <ul>
+      <li>Nombre de cada conductor y unidad asignada</li>
+      <li>Ubicación en tiempo real de cada unidad</li>
+      <li>Turno, reposo y vueltas del día</li>
+      <li>Avisos que reportan los propios conductores (salió/llegó)</li>
+      <li>Alertas de emergencia (ubicación y nombre al momento de activarse)</li>
+    </ul>
+
+    <h4>Incidencias que tú registras</h4>
+    <p>Cuando marcas "Llegó tarde" o "No se presentó", ese registro queda asociado al nombre del conductor y a la fecha, y puede incluirse en el PDF del día que generas desde este panel.</p>
+
+    <h4>Para qué los usamos</h4>
+    <p>Para supervisar y coordinar la ruta en tiempo real, llevar el control de incidencias del día, y poder auxiliar de inmediato en caso de una alerta de emergencia.</p>
+
+    <h4>Con quién se comparten</h4>
+    <p>Estos datos son visibles únicamente para ti y para el dueño de la ruta. Se almacenan mediante Supabase, nuestro proveedor de base de datos, únicamente como encargado técnico del tratamiento.</p>
+
+    <h4>Tus derechos y los de los conductores</h4>
+    <p>Cualquier persona cuyos datos se procesen aquí (tú o un conductor) puede solicitar acceso, corrección o eliminación de sus datos escribiendo al dueño de la ruta.</p>
+
+    <button id="privacyCloseBtn">Cerrar</button>
   </div>
 </div>
 <script src="cambiarVersion.js"></script>

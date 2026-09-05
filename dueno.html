@@ -462,7 +462,34 @@
   </div>
   <div id="driverDrawerContent" class="flex-1 overflow-y-auto px-5 py-4 space-y-4"></div>
 </aside>
+<!-- ===== MODAL DE AVISO DE PRIVACIDAD ===== -->
+<div id="privacyOverlay">
+  <div id="privacySheet">
+    <h3>Aviso de Privacidad</h3>
+    <p>Ruta San Simón (R-18) es responsable del tratamiento de tus datos personales como dueño de la ruta, y de los datos que este panel procesa sobre conductores y checador, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares.</p>
 
+    <h4>Datos que recabamos de ti (dueño)</h4>
+    <ul>
+      <li>Correo electrónico y contraseña de acceso</li>
+    </ul>
+
+    <h4>Datos que este panel muestra de conductores y checador</h4>
+    <ul>
+      <li>Nombre de cada conductor y unidad asignada</li>
+      <li>Ubicación en tiempo real de cada unidad</li>
+      <li>Ramal, turno y estatus de reposo</li>
+      <li>Registros y avisos del checador</li>
+      <li>Alertas de emergencia (ubicación y nombre al momento de activarse)</li>
+    </ul>
+
+    <h4>Para qué los usamos</h4>
+    <p>Para operar y supervisar la ruta en tiempo real, coordinar unidades y conductores, y poder auxiliar de inmediato en caso de una alerta de emergencia.</p>
+
+    <h4>Con quién se comparten</h4>
+    <p>Estos datos son visibles únicamente para ti como dueño y para el checador. Se almacenan mediante Supabase, nuestro proveedor de base de datos, únicamente como encargado técnico del tratamiento.</p>
+
+    <h4>Tus derechos y los de los conductores</h4>
+    <p>Cualquier persona cuyos datos se procesen aquí (tú, un conductor o el checador) puede solicitar acceso, corrección o eliminación de sus datos escribiendo al responsable de la ruta.</p>
 <script>
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -496,34 +523,7 @@
   })();
 </script>
 
-<!-- ===== MODAL DE AVISO DE PRIVACIDAD ===== -->
-<div id="privacyOverlay">
-  <div id="privacySheet">
-    <h3>Aviso de Privacidad</h3>
-    <p>Ruta San Simón (R-18) es responsable del tratamiento de tus datos personales como dueño de la ruta, y de los datos que este panel procesa sobre conductores y checador, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares.</p>
 
-    <h4>Datos que recabamos de ti (dueño)</h4>
-    <ul>
-      <li>Correo electrónico y contraseña de acceso</li>
-    </ul>
-
-    <h4>Datos que este panel muestra de conductores y checador</h4>
-    <ul>
-      <li>Nombre de cada conductor y unidad asignada</li>
-      <li>Ubicación en tiempo real de cada unidad</li>
-      <li>Ramal, turno y estatus de reposo</li>
-      <li>Registros y avisos del checador</li>
-      <li>Alertas de emergencia (ubicación y nombre al momento de activarse)</li>
-    </ul>
-
-    <h4>Para qué los usamos</h4>
-    <p>Para operar y supervisar la ruta en tiempo real, coordinar unidades y conductores, y poder auxiliar de inmediato en caso de una alerta de emergencia.</p>
-
-    <h4>Con quién se comparten</h4>
-    <p>Estos datos son visibles únicamente para ti como dueño y para el checador. Se almacenan mediante Supabase, nuestro proveedor de base de datos, únicamente como encargado técnico del tratamiento.</p>
-
-    <h4>Tus derechos y los de los conductores</h4>
-    <p>Cualquier persona cuyos datos se procesen aquí (tú, un conductor o el checador) puede solicitar acceso, corrección o eliminación de sus datos escribiendo al responsable de la ruta.</p>
 
     <button id="privacyCloseBtn">Cerrar</button>
   </div>

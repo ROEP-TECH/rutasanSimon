@@ -565,6 +565,22 @@
       try{ localStorage.setItem('rss_theme', next); }catch(e){}
     });
   });
+
+  // ===== AVISO DE PRIVACIDAD =====
+  (function(){
+    var privacyOverlay = document.getElementById('privacyOverlay');
+    document.querySelectorAll('.privacy-link-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ privacyOverlay.classList.add('show'); });
+    });
+    document.getElementById('privacyCloseBtn').addEventListener('click', function(){
+      privacyOverlay.classList.remove('show');
+    });
+    privacyOverlay.addEventListener('click', function(e){
+      if (e.target === privacyOverlay) privacyOverlay.classList.remove('show');
+    });
+  })();
 </script>
+</body>
+</html>
 </body>
 </html>

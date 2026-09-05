@@ -685,6 +685,44 @@
     z-index: 20;
     pointer-events: none;
   }
+    /* ===== MODAL DE AVISO DE PRIVACIDAD ===== */
+  #privacyOverlay {
+    position: fixed; inset: 0; z-index: 95;
+    background: rgba(5,7,10,0.72);
+    backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 1.5rem;
+  }
+  #privacyOverlay.show { display: flex; }
+  #privacySheet {
+    width: 100%; max-width: 26rem; max-height: 80vh; overflow-y: auto;
+    background: var(--surface); border-radius: 1.75rem; padding: 1.5rem;
+    border: 1px solid var(--border); box-shadow: var(--shadow-md);
+    animation: modalIn 0.25s ease-out;
+  }
+  #privacySheet h3 {
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.1rem;
+    margin-bottom: .75rem; color: var(--ink);
+  }
+  #privacySheet h4 {
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .85rem;
+    margin-top: 1rem; margin-bottom: .25rem; color: var(--talavera);
+  }
+  #privacySheet p, #privacySheet li { font-size: .82rem; line-height: 1.5; color: var(--ink-soft); }
+  #privacySheet ul { padding-left: 1.1rem; margin: .25rem 0; }
+  .privacy-link-btn {
+    background: transparent; border: none; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-faint); text-decoration: underline;
+    cursor: pointer; padding: .25rem;
+  }
+  .privacy-link-btn:hover { color: var(--talavera); }
+  #privacyCloseBtn {
+    margin-top: 1.25rem; width: 100%; padding: .75rem; border-radius: 1rem;
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: .9rem;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    cursor: pointer; transition: all .2s;
+  }
+  #privacyCloseBtn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 </style>
 </head>
 <body class="font-body bg-grid">
@@ -793,6 +831,7 @@
       <i data-lucide="siren" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
       <span>¿Emergencia? Botón rojo de abajo a la derecha.</span>
     </p>
+    <button class="privacy-link-btn mt-1" type="button">Aviso de privacidad</button>
   </div>
 </div>
 
@@ -905,7 +944,35 @@
     </div>
   </div>
 </div>
+<!-- ===== MODAL DE AVISO DE PRIVACIDAD ===== -->
+<div id="privacyOverlay">
+  <div id="privacySheet">
+    <h3>Aviso de Privacidad</h3>
+    <p>Ruta San Simón (R-18) es responsable del tratamiento de tus datos personales, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares.</p>
 
+    <h4>Datos que recabamos</h4>
+    <ul>
+      <li>Nombre del conductor</li>
+      <li>PIN de acceso (credencial)</li>
+      <li>Ubicación en tiempo real de la unidad, mientras la actives</li>
+      <li>Unidad asignada y ramal de la ruta</li>
+      <li>Estatus de turno y reposo</li>
+      <li>Alertas de emergencia (ubicación y nombre al momento de activarse)</li>
+      <li>Fotografía de perfil (opcional, solo si decides subirla)</li>
+    </ul>
+
+    <h4>Para qué los usamos</h4>
+    <p>Para operar y coordinar la ruta en tiempo real, identificar tu unidad en el mapa del dueño y del checador, y poder auxiliarte en caso de una alerta de emergencia.</p>
+
+    <h4>Con quién se comparten</h4>
+    <p>Solo el dueño de la ruta y el checador pueden verlos. Se almacenan mediante Supabase, nuestro proveedor de base de datos, únicamente como encargado técnico.</p>
+
+    <h4>Tus derechos</h4>
+    <p>Puedes pedir acceso, corrección o eliminación de tus datos, y dejar de compartir tu ubicación apagando el botón correspondiente o cerrando sesión. Para ejercerlos, contacta al dueño de la ruta.</p>
+
+    <button id="privacyCloseBtn">Cerrar</button>
+  </div>
+</div>
 <!-- ===== INDICADOR DE VERSIÓN EN EL FOOTER ===== -->
 <div id="versionFooter">v1.0</div>
 <script src="cambiarVersion.js"></script>
@@ -1113,6 +1180,21 @@
       try{ localStorage.setItem('rss_theme', next); }catch(e){}
     });
   });
+
+  <
+  (function(){
+    var privacyOverlay = document.getElementById('privacyOverlay');
+    document.querySelectorAll('.privacy-link-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ privacyOverlay.classList.add('show'); });
+    });
+    document.getElementById('privacyCloseBtn').addEventListener('click', function(){
+      privacyOverlay.classList.remove('show');
+    });
+    privacyOverlay.addEventListener('click', function(e){
+      if (e.target === privacyOverlay) privacyOverlay.classList.remove('show');
+    });
+  })();
+
 </script>
 </body>
 </html>

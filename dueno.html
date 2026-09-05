@@ -490,6 +490,9 @@
 
     <h4>Tus derechos y los de los conductores</h4>
     <p>Cualquier persona cuyos datos se procesen aquí (tú, un conductor o el checador) puede solicitar acceso, corrección o eliminación de sus datos escribiendo al responsable de la ruta.</p>
+
+
+
 <script>
   document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -499,15 +502,9 @@
     });
   });
 </script>
-<script>
-  document.querySelectorAll('.theme-toggle-btn').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      try{ localStorage.setItem('rss_theme', next); }catch(e){}
-    });
-  });
 
+
+<script>
   // ===== AVISO DE PRIVACIDAD =====
   (function(){
     var privacyOverlay = document.getElementById('privacyOverlay');

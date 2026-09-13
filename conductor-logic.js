@@ -834,7 +834,7 @@ async function startSharingNative() {
         backgroundTitle: 'Compartiendo ubicación',
         requestPermissions: true,
         stale: false,
-        distanceFilter: 10, // metros; baja este número si quieres updates más seguidos
+        distanceFilter: 0, // metros; baja este número si quieres updates más seguidos
       },
       (location, error) => {
         if (error) {
@@ -1016,3 +1016,11 @@ async function sendPanicAlert(lat, lng) {
 renderSyncIndicator();
 flushQueue(); // por si quedó algo pendiente de la sesión anterior (batería, cierre abrupto, etc.)
 tryAutoLogin();
+
+// Reloj continuo en pantalla independiente de la frecuencia del GPS
+setInterval(() => {
+  const updatedText = document.getElementById('updatedText');
+  if (updatedText) {
+    updatedText.textContent = new Date().toLocaleTimeString('es-MX');
+  }
+}, 1000);
